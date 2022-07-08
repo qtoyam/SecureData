@@ -9,5 +9,10 @@ namespace SecureData.DataBase.Helpers
 		{
 			System.Security.Cryptography.RandomNumberGenerator.Fill(data);
 		}
+
+		public static void ZeroOut(Span<byte> data)
+		{
+			System.Security.Cryptography.CryptographicOperations.ZeroMemory(data);
+		}
 	}
 }

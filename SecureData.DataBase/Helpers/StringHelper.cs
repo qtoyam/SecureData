@@ -19,10 +19,26 @@ namespace SecureData.DataBase.Helpers
 			return _enc.GetString(res);
 		}
 
-		//str's size should NOT be greater than fixedSize
-		public static void Write(Span<byte> bytes, string str, int fixedSize)
+		/// <summary>
+		/// Writes <paramref name="str"/> to <paramref name="s_buffer"/> with <paramref name="fixedSize"/> in bytes.
+		/// </summary>
+		/// <param name="s_buffer"></param>
+		/// <param name="str">size should NOT be greater than <paramref name="fixedSize"/>.</param>
+		/// <param name="fixedSize"></param>
+		/// <returns>Written bytes.</returns>
+		//public static int Write(Span<byte> s_buffer, string str, int fixedSize)
+		//{
+		//	int encodedBytes = _enc.GetBytes(str, s_buffer.Slice(0, fixedSize));
+		//	s_buffer[encodedBytes] = 0; //null terminate
+		//	return encodedBytes + 1;
+		//}
+
+		//TODO: test
+		public static void WriteWithRNG(Span<byte> s_buffer, string str)
 		{
-			_enc.GetBytes(str, bytes.Slice(0, fixedSize));
+			int encodedBytes = _enc.GetBytes(str, s_buffer);
+			s_buffer[encodedBytes] = 0; //null terminate
+			Utils.RNG(s_buffer.Slice(encodedBytes + 1));
 		}
 	}
 }

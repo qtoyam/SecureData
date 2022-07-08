@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -13,19 +14,40 @@ namespace SecureData.DataBase.ModelsIO
 {
 	internal static class DataIO
 	{
-		//TODO: initer
+		//TODO: reader
 		/// <summary>
-		/// Reads IData from <paramref name="buffer"/>.
+		/// Reads IData from <paramref name="s_buffer"/>.
 		/// </summary>
-		/// <param name="buffer">Must be atleast <see cref="LayoutBase.MaxDataSize"/> size.</param>
+		/// <param name="s_buffer">Must be atleast <see cref="LayoutBase.MaxDataSize"/> size.</param>
 		/// <returns><see langword="null"/> if <see cref="IData"/> marked as <see cref="DataType.Deleted"/>, otherwise inited <see cref="IData"/>.</returns>
-		private static IData? ReadIData(ReadOnlySpan<byte> buffer, out int bytesRead)
+		private static IData? ReadIData(ReadOnlySpan<byte> s_buffer, out int bytesRead)
 		{
 			bytesRead = 0;
 			return null;
 		}
 
-		public static async ValueTask<Dictionary<uint, IData>> ReadIDatasAsync(BlockCryptoStream bcs, Memory<byte> m_buffer, SHA256 sha256)
+		public static void WriteToBuffer(IDataBox dataBox, Span<byte> s_buffer)
+		{
+			Span<byte> working;
+
+			//DataType
+			working = s_buffer.Slice(IData.Layout.DataTypeOffset);
+			BinaryHelper.Write(working, (uint)dataBox.DataType);
+
+			//Id
+			working = s_buffer.Slice(IData.Layout.IdOffset);
+			BinaryHelper.Write(working, dataBox.Id);
+
+			//Parent
+			working = s_buffer.Slice(IData.Layout.ParentIdOffset);
+			BinaryHelper.Write(working, dataBox.Parent?.Id ?? 0U);
+
+			//TimeStamp
+			working = s_buffer.Slice(IData.Layout.TimeStampOffset);
+			BinaryHelper.Write(working, dataBox.TimeStamp.ToBinary());
+		}
+
+		public static async Task<Dictionary<uint, IData>> ReadIDatasAsync(BlockCryptoStream bcs, Memory<byte> m_buffer, SHA256 sha256)
 		{
 			Dictionary<uint, IData> items = new();
 			//assume data starts right after DBHeader
@@ -72,6 +94,16 @@ namespace SecureData.DataBase.ModelsIO
 				}
 			}
 			return items;
+		}
+
+		public static async Task ComputeDatasHashAsync(BlockCryptoStream bcs, Memory<byte> m_buffer, SHA256 sha256)
+		{
+			bcs.Position = DBHeader.Layout.DBSize;
+			int bytesRead;
+			while ((bytesRead = await bcs.ReadAsync(m_buffer).ConfigureAwait(false)) > 0)
+			{
+				sha256.Transform(m_buffer.Span.Slice(0, bytesRead));
+			}
 		}
 	}
 }

@@ -10,6 +10,7 @@ namespace SecureData.DataBase.Helpers
 {
 	internal static class DataHelper
 	{
+		//TODO: organize folders
 		public static void OrganizeFolders(IDictionary<uint, IData> data)
 		{
 

@@ -36,7 +36,7 @@ namespace SecureData.DataBase.ModelsIO
 
 			return new DBHeader(hash, version, salt, login);
 		}
-		public static async ValueTask ReadRNGAsync(BlockCryptoStream bcs, Memory<byte> m_buffer, SHA256 sha256)
+		public static async Task ComputeRNGHashAsync(BlockCryptoStream bcs, Memory<byte> m_buffer, SHA256 sha256)
 		{
 			bcs.Position = DBHeader.Layout.RNGOffset;
 			int fullRuns = DBHeader.Layout.RNGSize / m_buffer.Length;
@@ -59,7 +59,7 @@ namespace SecureData.DataBase.ModelsIO
 			bcs.Position = 0;
 			s_buffer = s_buffer.Slice(0, DBHeader.Layout.Size);
 			BinaryHelper.Write(s_buffer.Slice(DBHeader.Layout.HashOffset), dbHeader.Hash.Span); //hash
-			BinaryHelper.WriteUInt32(s_buffer.Slice(DBHeader.Layout.VersionOffset), dbHeader.Version); //version
+			BinaryHelper.Write(s_buffer.Slice(DBHeader.Layout.VersionOffset), dbHeader.Version); //version
 			BinaryHelper.Write(s_buffer.Slice(DBHeader.Layout.SaltOffset), dbHeader.Salt.Span); //salt
 			StringHelper.Write(s_buffer.Slice(DBHeader.Layout.LoginOffset),
 				dbHeader.Login, DBHeader.Layout.LoginSize); //login
@@ -98,7 +98,17 @@ namespace SecureData.DataBase.ModelsIO
 			}
 		}
 
-		public static void WriteHash(BlockCryptoStream bcs, DBHeader dbHeader)
+		public static async Task ComputeDBHeaderHashAsync(BlockCryptoStream bcs, Memory<byte> m_buffer, SHA256 sha256)
+		{
+			bcs.Position = DBHeader.Layout.HashingStart;
+			{
+				Memory<byte> m_noEncryptBuffer = m_buffer.Slice(0, DBHeader.Layout.EncryptionStart);
+				bcs.ReadThroughEncryption(m_noEncryptBuffer.Span);
+				sha256.Transform(m_noEncryptBuffer.Span);
+			}
+			await ComputeRNGHashAsync(bcs, m_buffer, sha256).ConfigureAwait(false);
+		}
+		public static void UpdateHash(BlockCryptoStream bcs, DBHeader dbHeader)
 		{
 			bcs.Position = DBHeader.Layout.HashOffset;
 			bcs.WriteThroughEncryption(dbHeader.Hash.Span);

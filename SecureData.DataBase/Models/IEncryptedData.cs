@@ -1,6 +1,6 @@
 ﻿namespace SecureData.DataBase.Models
 {
-	public interface IEncryptedData : IData
+	internal interface IEncryptedData : IData
 	{
 		public new abstract class Layout : IData.Layout
 		{
@@ -13,7 +13,14 @@
 			protected new const int Size = SaltOffset + SaltSize;
 		}
 
-		public bool IsEncrypted { get; }
-		public ReadOnlyMemory<byte> Salt { get; }
+
+		public bool IsEncrypted { get; set; }
+		public ReadOnlyMemory<byte> Salt { get; set; }
+	}
+	public interface IEncryptedDataBox : IDataBox
+	{
+		public bool IsEncrypted { get; set; }
+		internal Memory<byte> Salt { get; set; }
+		internal ReadOnlyMemory<byte> Key { get; set; }
 	}
 }

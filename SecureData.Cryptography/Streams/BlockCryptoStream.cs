@@ -160,7 +160,17 @@ namespace SecureData.Cryptography.Streams
 		}
 
 		/// <summary>
-		/// Write <paramref name="buffer"/> WITHOUT encryption to stream.
+		/// Read <paramref name="buffer"/> WITHOUT encryption.
+		/// </summary>
+		/// <param name="buffer"></param>
+		public void ReadThroughEncryption(Span<byte> buffer)
+		{
+			ThrowIfWrongCount(buffer.Length);
+			_baseStream.Read(buffer);
+			UpdateCTR();
+		}
+		/// <summary>
+		/// Write <paramref name="buffer"/> WITHOUT encryption.
 		/// </summary>
 		/// <param name="buffer"></param>
 		public void WriteThroughEncryption(ReadOnlySpan<byte> buffer)

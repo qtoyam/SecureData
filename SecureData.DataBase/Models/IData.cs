@@ -1,6 +1,6 @@
 ﻿namespace SecureData.DataBase.Models
 {
-	public interface IData
+	internal interface IData
 	{
 		public abstract class Layout : LayoutBase
 		{
@@ -20,12 +20,26 @@
 			public const int TimeStampSize = sizeof(long);
 
 			protected const int Size = TimeStampOffset + TimeStampSize;
+
+			public const int HashingStart = DataTypeOffset;
 		}
 
-		public ReadOnlyMemory<byte> Hash { get; }
+
+		public Memory<byte> Hash { get; set; }
+		public DataType DataType { get; set; }
+		public UInt32 Id { get; set; }
+		public IData? Parent { get; set; }
+		public DateTime TimeStamp { get; set; }
+
+		public int DBSize { get; }
+	}
+	public interface IDataBox
+	{
+		internal IData? Original { get; set; }
+		internal UInt32 Id { get; set; }
 		public DataType DataType { get; }
-		public UInt32 Id { get; }
-		public IData? Parent { get; }
-		public DateTime TimeStamp { get; }
+		public IDataBox? Parent { get; set; }
+		public DateTime TimeStamp { get; set; }
+		public EncryptionChain? EncryptionChain { get; set; }
 	}
 }
