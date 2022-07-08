@@ -2,7 +2,7 @@
 {
 	public class DBHeader
 	{
-		public static class Layout
+		public class Layout : LayoutBase
 		{
 			public const int HashSize = 32;
 			public const int HashOffset = 0;
@@ -16,15 +16,15 @@
 			public const int LoginSize = 256;
 			public const int LoginOffset = SaltSize + SaltOffset;
 
-			public const int RealSize = LoginOffset + LoginSize;
+			public const int Size = LoginOffset + LoginSize;
 
-			public const int RNGOffset = RealSize;
+			public const int RNGOffset = Size;
 			public const int RNGSize = 11968;
 
 			public const int HashingStart = VersionOffset; //hash from version
 			public const int EncryptionStart = RNGOffset; //encrypt from RNG
 
-			public const int DBSize = RealSize + RNGSize;
+			public new const int DBSize = Size + RNGSize;
 		}
 		public ReadOnlyMemory<byte> Hash => HashCore;
 		internal Memory<byte> HashCore { get; }

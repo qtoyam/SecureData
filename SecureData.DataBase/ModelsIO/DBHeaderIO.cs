@@ -11,7 +11,7 @@ namespace SecureData.DataBase.ModelsIO
 	{
 		public static DBHeader Read(Stream stream, Span<byte> s_buffer, SHA256 sha256)
 		{
-			s_buffer = s_buffer.Slice(0, DBHeader.Layout.RealSize);
+			s_buffer = s_buffer.Slice(0, DBHeader.Layout.Size);
 			if (stream.Length < DBHeader.Layout.DBSize)
 			{
 				throw DataBaseCorruptedException.WrongDBHeader();
@@ -57,7 +57,7 @@ namespace SecureData.DataBase.ModelsIO
 		public static void WriteReal(BlockCryptoStream bcs, DBHeader dbHeader, Span<byte> s_buffer, SHA256 sha256)
 		{
 			bcs.Position = 0;
-			s_buffer = s_buffer.Slice(0, DBHeader.Layout.RealSize);
+			s_buffer = s_buffer.Slice(0, DBHeader.Layout.Size);
 			BinaryHelper.Write(s_buffer.Slice(DBHeader.Layout.HashOffset), dbHeader.Hash.Span); //hash
 			BinaryHelper.WriteUInt32(s_buffer.Slice(DBHeader.Layout.VersionOffset), dbHeader.Version); //version
 			BinaryHelper.Write(s_buffer.Slice(DBHeader.Layout.SaltOffset), dbHeader.Salt.Span); //salt

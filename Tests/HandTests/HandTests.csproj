@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\SecureData.Cryptography\SecureData.Cryptography.csproj" />
+    <ProjectReference Include="..\..\SecureData.DataBase\SecureData.DataBase.csproj" />
   </ItemGroup>
 
 </Project>

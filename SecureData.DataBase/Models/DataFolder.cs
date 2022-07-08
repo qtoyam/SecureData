@@ -2,8 +2,24 @@
 {
 	public sealed class DataFolder : IEncryptedData
 	{
+		public class Layout : IEncryptedData.Layout
+		{
+			public const int NameOffset = IEncryptedData.Layout.Size;
+			public const int NameSize = 64;
+
+			public const int DescriptionOffset = NameOffset + NameSize;
+			public const int DescriptionSize = 256;
+
+			public new const int Size = DescriptionOffset + DescriptionSize;
+
+			public const int RNGOffset = Size;
+			public const int RNGSize = 11;
+
+			public new const int DBSize = RNGOffset + RNGSize;
+		}
+
 		#region IData
-		public const int Size = 400;
+		public ReadOnlyMemory<byte> Hash { get; }
 		public DataType DataType => DataType.DataFolder;
 		public uint Id { get; }
 		public IData? Parent { get; }
@@ -13,7 +29,6 @@
 		#region IEncryptedData
 		public bool IsEncrypted { get; }
 		public ReadOnlyMemory<byte> Salt { get; }
-		public ReadOnlyMemory<byte> Hmac { get; }
 		#endregion
 
 		#region DataFolder

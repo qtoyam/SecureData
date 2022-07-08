@@ -6,6 +6,7 @@ using System.Text;
 using SecureData.Cryptography;
 using SecureData.Cryptography.SymmetricEncryption;
 using SecureData.Cryptography.Streams;
+using SecureData.DataBase.Models;
 
 namespace HandTests
 {
@@ -13,7 +14,6 @@ namespace HandTests
 	{
 		static void Main()
 		{
-
 		}
 	}
 }

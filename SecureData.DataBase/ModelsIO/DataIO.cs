@@ -13,53 +13,63 @@ namespace SecureData.DataBase.ModelsIO
 {
 	internal static class DataIO
 	{
-		public static async ValueTask<Dictionary<uint, IData>> ReadAsync(BlockCryptoStream bcs, Memory<byte> m_buffer, SHA256 sha256)
+		//TODO: initer
+		/// <summary>
+		/// Reads IData from <paramref name="buffer"/>.
+		/// </summary>
+		/// <param name="buffer">Must be atleast <see cref="LayoutBase.MaxDataSize"/> size.</param>
+		/// <returns><see langword="null"/> if <see cref="IData"/> marked as <see cref="DataType.Deleted"/>, otherwise inited <see cref="IData"/>.</returns>
+		private static IData? ReadIData(ReadOnlySpan<byte> buffer, out int bytesRead)
+		{
+			bytesRead = 0;
+			return null;
+		}
+
+		public static async ValueTask<Dictionary<uint, IData>> ReadIDatasAsync(BlockCryptoStream bcs, Memory<byte> m_buffer, SHA256 sha256)
 		{
 			Dictionary<uint, IData> items = new();
 			//assume data starts right after DBHeader
 			bcs.Position = DBHeader.Layout.DBSize;
-			int existingBytes = 0; //bytes read, hashed, but not transformed into IData yet
+			int existingBytes = 0; //bytes read & hashed but not transformed into IData yet
 			int bytesRead;
 			while (
+				//read full buffer except existingBytes
 				(bytesRead = await bcs.ReadAsync(m_buffer.Slice(existingBytes)).ConfigureAwait(false))
 				> 0)
 			{
 				//TODO: parallel hash with semaphores
 				//note: hash only read bytes except hashed already(existingBytes)
 				sha256.Transform(m_buffer.Span.Slice(existingBytes, bytesRead - existingBytes));
-				existingBytes = 0; //reset
-				ReadOnlyMemory<byte> m_currentBuffer = m_buffer;
-				while (m_currentBuffer.Length > 0)
-				//note: current buffer length will be always >= 16 or == 0 (cauze of IData types size)
-				//		so we can read atleast DataType (4 bytes)
+				int readTo;
+				if (bytesRead == (m_buffer.Length - existingBytes)) //current buffer filled, so assume there is extra bytes in BCS
 				{
-					DataType dt = (DataType)BitConverter.ToUInt32(m_buffer.Span);
-					int size = DataHelper.GetSizeFromType(dt);
-					if (m_currentBuffer.Length >= size) //current buffer has all data
-					{
-						IData? d = DataHelper.InitIData(m_currentBuffer.Span.Slice(0, size), dt);
-						if (d != null) // == not deleted
-						{
-							items.Add(d.Id, d);
-						}
-						m_currentBuffer = m_currentBuffer.Slice(size); //slice current buffer (remove used data)
-					}
-					//TODO: split while(currentBuffer) into two:
-					//1) loop while >= max data unit size
-					//2) finish while > 0
-					else //current buffer doesnt have enough data
-					{
-						//note: we can do this only when all IData types have size multiple of 16 (CTR block size).
-						m_currentBuffer.CopyTo(m_buffer); //copy for future
-						existingBytes = m_currentBuffer.Length; //dont read this region again
-						break; //we need more bytes in current buffer
-					}
+					readTo = LayoutBase.MaxDataSize; //read while we sure that current buffer is enough to complete any DataType
 				}
-			}
-			//situation: current IData not completed, but file ends
-			if (existingBytes != 0)
-			{
-				throw DataBaseCorruptedException.WrongDBSize();
+				else //end of file, last buffer
+				{
+					readTo = 0; //read all buffer
+				}
+				ReadOnlyMemory<byte> m_currentBuffer = m_buffer;
+
+				while (m_currentBuffer.Length >= readTo)
+				{
+					IData? data = ReadIData(m_currentBuffer.Span, out int br);
+					if (data != null) //not deleted
+					{
+						items.Add(data.Id, data);
+					}
+					m_currentBuffer = m_currentBuffer.Slice(br);
+				}
+				if (m_currentBuffer.Length != 0)
+				{
+					// will throw in ReadIData if not readTo == 0
+					m_currentBuffer.CopyTo(m_buffer); //copy for next iteration
+					existingBytes = m_currentBuffer.Length; //dont read/hash this region again
+				}
+				else
+				{
+					existingBytes = 0; //reset cauze processed all data
+				}
 			}
 			return items;
 		}

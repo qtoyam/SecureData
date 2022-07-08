@@ -1,4 +1,6 @@
-﻿using SecureData.Cryptography.Hash;
+﻿using System.Collections.ObjectModel;
+
+using SecureData.Cryptography.Hash;
 using SecureData.Cryptography.Streams;
 using SecureData.Cryptography.SymmetricEncryption;
 using SecureData.DataBase.Exceptions;
@@ -27,12 +29,16 @@ namespace SecureData.DataBase
 		private readonly Dictionary<uint, IData> _data;
 		private readonly byte[] _buffer;
 
+		private readonly ReadOnlyDictionary<uint, IData> _items;
+		public ReadOnlyDictionary<uint, IData> Items => _items;
+
 		private DB(Aes256Ctr aes, DBHeader dbHeader, BlockCryptoStream bcs, Dictionary<uint, IData> data, byte[] buffer)
 		{
 			_aes = aes;
 			_header = dbHeader;
 			_bcs = bcs;
 			_data = data;
+			_items = new(_data);
 			_buffer = buffer;
 		}
 
@@ -82,7 +88,7 @@ namespace SecureData.DataBase
 				await DBHeaderIO.ReadRNGAsync(bcs, buffer, sha256).ConfigureAwait(false);
 
 				//read and hash items
-				data = await DataIO.ReadAsync(bcs, buffer, sha256).ConfigureAwait(false);
+				data = await DataIO.ReadIDatasAsync(bcs, buffer, sha256).ConfigureAwait(false);
 				byte[] actualHash = sha256.Finalize();
 				if (!dbHeader.Hash.Span.SequenceEqual(actualHash))
 				{
@@ -146,6 +152,11 @@ namespace SecureData.DataBase
 				bcs?.Dispose();
 				throw;
 			}
+		}
+
+		public async Task AddIDataAsync(IData data)
+		{
+
 		}
 
 		public void Dispose()

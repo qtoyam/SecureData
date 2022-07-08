@@ -20,6 +20,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SecureData.Tests", "Tests\S
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HandTests", "Tests\HandTests\HandTests.csproj", "{403A2E1E-F15F-4A6D-9854-31B97C56639A}"
+	ProjectSection(ProjectDependencies) = postProject
+		{0BD2044E-281D-4A93-A9D3-A81AD0AE3264} = {0BD2044E-281D-4A93-A9D3-A81AD0AE3264}
+	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SecureData.DataBase", "SecureData.DataBase\SecureData.DataBase.csproj", "{0BD2044E-281D-4A93-A9D3-A81AD0AE3264}"
 	ProjectSection(ProjectDependencies) = postProject
