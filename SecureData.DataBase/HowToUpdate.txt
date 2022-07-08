@@ -1,0 +1,4 @@
+﻿DBHeader:
+	update DBHeader and DBHeader.Layout
+	update IO logic in ModelsIO\DBHeaderIO.cs
+	ensure Create/Init logic in DB.cs
