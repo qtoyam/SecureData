@@ -11,9 +11,14 @@ namespace SecureData.Cryptography.Hash
 		private readonly SHA256SafeHandle _handle;
 		private bool _isFinal;
 
-		public SHA256()
+		private SHA256(SHA256SafeHandle handle, bool isFinal)
 		{
-			Native.SHA256_CreateHandle(out _handle);
+			_handle = handle;
+			_isFinal = isFinal;
+		}
+
+		public SHA256() : this(Native.SHA256_CreateHandle(), false)
+		{
 			Initialize();
 		}
 
@@ -91,6 +96,13 @@ namespace SecureData.Cryptography.Hash
 
 		public void Dispose() => _handle.Dispose();
 
+		public SHA256 Clone()
+		{
+			SHA256SafeHandle newHandle = Native.SHA256_CreateHandle();
+			Native.SHA256_Clone(_handle, newHandle);
+			return new SHA256(newHandle, _isFinal);
+		}
+
 		private sealed class SHA256SafeHandle : SafeHandle
 		{
 			public SHA256SafeHandle() : base(IntPtr.Zero, true) { }
@@ -105,16 +117,24 @@ namespace SecureData.Cryptography.Hash
 		}
 		private static class Native
 		{
+			public static SHA256SafeHandle SHA256_CreateHandle()
+			{
+				SHA256_CreateHandle(out SHA256SafeHandle handle);
+				return handle;
+			}
+
 			[DllImport(DllImportManager.DllName)]
-			public static extern unsafe void SHA256_CreateHandle(out SHA256SafeHandle handle);
+			private static extern void SHA256_CreateHandle(out SHA256SafeHandle handle);
 			[DllImport(DllImportManager.DllName)]
-			public static extern unsafe void SHA256_DestroyHandle(IntPtr handle);
+			public static extern void SHA256_DestroyHandle(IntPtr handle);
 			[DllImport(DllImportManager.DllName)]
-			public static extern unsafe void SHA256_Initialize(SHA256SafeHandle handle);
+			public static extern void SHA256_Initialize(SHA256SafeHandle handle);
 			[DllImport(DllImportManager.DllName)]
 			public static extern unsafe void SHA256_Transform(SHA256SafeHandle handle, void* input, UInt64 size);
 			[DllImport(DllImportManager.DllName)]
 			public static extern unsafe void SHA256_Finalize(SHA256SafeHandle handle, void* output);
+			[DllImport(DllImportManager.DllName)]
+			public static extern void SHA256_Clone(SHA256SafeHandle source, SHA256SafeHandle destination);
 			[DllImport(DllImportManager.DllName)]
 			public static extern unsafe void SHA256_GenerateHash(void* input, void* output, UInt64 size);
 		}
