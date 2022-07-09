@@ -1,6 +1,6 @@
 ﻿namespace SecureData.DataBase.Models
 {
-	internal interface IData
+	public interface IData
 	{
 		public abstract class Layout : LayoutBase
 		{
@@ -24,22 +24,21 @@
 			public const int HashingStart = DataTypeOffset;
 		}
 
+		//public Memory<byte> Hash { get; set; }
+		//public DataType DataType { get; set; }
+		public UInt32 Id { get; }
+		//public IData? Parent { get; set; }
+		//public DateTime TimeStamp { get; set; }
 
-		public Memory<byte> Hash { get; set; }
-		public DataType DataType { get; set; }
-		public UInt32 Id { get; set; }
-		public IData? Parent { get; set; }
-		public DateTime TimeStamp { get; set; }
+		//public int DBSize { get; }
 
-		public int DBSize { get; }
-	}
-	public interface IDataBox
-	{
-		internal IData? Original { get; set; }
-		internal UInt32 Id { get; set; }
-		public DataType DataType { get; }
-		public IDataBox? Parent { get; set; }
-		public DateTime TimeStamp { get; set; }
-		public EncryptionChain? EncryptionChain { get; set; }
+		//internal ReadOnlySpan<byte> GetRaw();
+
+		/// <summary>
+		/// Copy raw data to <paramref name="buffer"/>
+		/// </summary>
+		/// <param name="buffer"></param>
+		/// <returns>Bytes copied.</returns>
+		public int CopyTo(Span<byte> buffer);
 	}
 }

@@ -1,14 +1,12 @@
 ﻿using System.Collections.ObjectModel;
+using System.Runtime.InteropServices;
 
 using SecureData.Cryptography.Hash;
 using SecureData.Cryptography.Streams;
 using SecureData.Cryptography.SymmetricEncryption;
 using SecureData.DataBase.Exceptions;
 using SecureData.DataBase.Models;
-using SecureData.DataBase.ModelsIniter;
 using SecureData.DataBase.ModelsIO;
-
-using static SecureData.DataBase.Helpers.Utils;
 
 //TODO: ValueTask ? Task
 
@@ -55,8 +53,10 @@ namespace SecureData.DataBase
 			_data = data;
 			//_items = new(_data);
 		}
+		private DB(byte[] buffer, DBHeader dbHeader, Aes256Ctr aes, BlockCryptoStream bcs, SHA256 sha256)
+			:this(buffer, dbHeader, aes, bcs, sha256, new Dictionary<uint, IData>()) { }
 
-		public static async Task<DB> InitAsync(string path, ReadOnlyMemory<byte> key)
+		public static DB Init(string path, ReadOnlySpan<byte> key)
 		{
 			//to be inited
 			//disposable on exception
@@ -64,15 +64,16 @@ namespace SecureData.DataBase
 			BlockCryptoStream? bcs = null;
 			SHA256? sha256 = null;
 
-			DBHeader dbHeader;
+			DBHeader dbHeader = new();
 			Dictionary<uint, IData> data;
 			byte[] buffer = new byte[Consts.InitBufferSize];
 			try
 			{
-				Memory<byte> m_buffer = buffer;
+				Span<byte> s_buffer = buffer;
 				sha256 = new SHA256();
 
-				//read and hash dbheader
+				//read, create and hash dbheader
+				Span<byte> s_dbHeader = dbHeader.GetRaw();
 				using (var f = new FileStream(path, new FileStreamOptions()
 				{
 					Share = FileShare.None,
@@ -82,11 +83,12 @@ namespace SecureData.DataBase
 					Options = FileOptions.SequentialScan
 				}))
 				{
-					dbHeader = DBHeaderIO.Read(f, m_buffer.Span, sha256);
+					f.Read(s_dbHeader);
 				}
+				DBHeaderIO.ComputeHash(s_dbHeader, sha256);
 
 				//create main BlockCryptoStream
-				aes = new Aes256Ctr(key.Span, dbHeader.Salt.Span);
+				aes = new Aes256Ctr(key, DBHeader.GetSalt(s_dbHeader));
 				bcs = new BlockCryptoStream(path, new FileStreamOptions()
 				{
 					Share = FileShare.None,
@@ -97,13 +99,13 @@ namespace SecureData.DataBase
 				}, aes, false);
 
 				//hash RNG in dbheader
-				await DBHeaderIO.ComputeRNGHashAsync(bcs, m_buffer, sha256).ConfigureAwait(false);
+				DBHeaderIO.ComputeRNGHash(bcs, s_buffer, sha256);
 
 				//read and hash items
-				data = await DataIO.ReadIDatasAsync(bcs, m_buffer, sha256).ConfigureAwait(false);
-				Memory<byte> actualHash = m_buffer.Slice(0, SHA256.HashSize);
-				sha256.Finalize(actualHash.Span);
-				if (!dbHeader.Hash.Span.SequenceEqual(actualHash.Span))
+				data = DataIO.ReadAllIData(bcs, s_buffer, sha256);
+				Span<byte> s_actualHash = s_buffer.Slice(0, DBHeader.Layout.HashSize);
+				sha256.Finalize(s_actualHash);
+				if (!MemoryHelper.Compare(s_actualHash, DBHeader.GetHash(s_dbHeader)))
 				{
 					throw new DataBaseWrongHashException();
 				}
@@ -122,11 +124,11 @@ namespace SecureData.DataBase
 			}
 			finally
 			{
-				ZeroOut(buffer);
+				MemoryHelper.ZeroOut(buffer);
 			}
 		}
 
-		public static async Task<DB> CreateAsync(string path, ReadOnlyMemory<byte> key, ReadOnlyMemory<byte> salt, string login)
+		public static DB Create(string path, ReadOnlySpan<byte> key, ReadOnlySpan<byte> salt, string login)
 		{
 			//to be created
 			//disposable on exception
@@ -134,13 +136,13 @@ namespace SecureData.DataBase
 			BlockCryptoStream? bcs = null;
 			SHA256? sha256 = null;
 
-			DBHeader dbHeader;
-			Dictionary<uint, IData> data = new();
+			DBHeader dbHeader = new();
 			byte[] buffer = new byte[Consts.InitBufferSize];
 			try
 			{
-				Memory<byte> m_buffer = buffer;
-				aes = new Aes256Ctr(key.Span, salt.Span);
+				Span<byte> s_buffer = buffer;
+				sha256 = new SHA256();
+				aes = new Aes256Ctr(key, salt);
 				bcs = new BlockCryptoStream(path, new FileStreamOptions()
 				{
 					Share = FileShare.None,
@@ -150,17 +152,21 @@ namespace SecureData.DataBase
 					Options = FileOptions.RandomAccess | FileOptions.Asynchronous
 				}, aes, false);
 
-				dbHeader = new DBHeader(new byte[DBHeader.Layout.HashSize], Consts.Version, salt, login);
-				sha256 = new SHA256();
-				//write and hash dbheader
-				DBHeaderIO.WriteReal(bcs, dbHeader, m_buffer.Span, sha256);
-				await DBHeaderIO.WriteRNGAsync(bcs, m_buffer, sha256).ConfigureAwait(false);
-				sha256.Finalize(dbHeader.HashCore.Span);
-				DBHeaderIO.UpdateHash(bcs, dbHeader); //update hash after rng
+				Span<byte> s_dbHeader = dbHeader.GetRaw();
+
+				dbHeader.Init(s_dbHeader, Consts.Version, salt, login); //set values
+
+				DBHeaderIO.ComputeHash(s_dbHeader, sha256); //hash dbheader
+				DBHeaderIO.Write(bcs, s_dbHeader);
+				DBHeaderIO.FillRNG(bcs, s_buffer, sha256); //write rng to bcs
+
+				Span<byte> s_dbHeader_Hash = DBHeader.GetHash(s_dbHeader);
+				sha256.Finalize(s_dbHeader_Hash); //finish hash directly to DBHeader
+				DBHeaderIO.WriteHash(bcs, s_dbHeader_Hash); //update hash in bcs
 
 				sha256.Initialize();
-				return new DB(buffer, dbHeader, aes, bcs, sha256, data);
-				//note: buffer will be garbaged with encrypted stuff, so no need to ZeroOut it.
+				return new DB(buffer, dbHeader, aes, bcs, sha256);
+				//note: buffer contains encrypted RNG, so no need to ZeroOut it.
 			}
 			catch
 			{
@@ -171,46 +177,56 @@ namespace SecureData.DataBase
 			}
 		}
 
-		public async Task AddIDataAsync(IDataBox dataBox)
-		{
-			Memory<byte> m_buffer = _buffer;
-			try
-			{
-				await ComputeHash().ConfigureAwait(false);
-				using (SHA256 tmp_sha256 = _sha256.Clone())
-				{
-					Memory<byte> m_tmpHashBuffer = m_buffer.Slice(0, DBHeader.Layout.HashSize);
-					tmp_sha256.Finalize(m_tmpHashBuffer.Span);
-					if (!m_tmpHashBuffer.Span.SequenceEqual(_header.Hash.Span))
-					{
-						throw new DataBaseWrongHashException();
-					}
-				}
-				IData data = DataCreator.InitIData(dataBox, m_buffer.Span); //create IData and write it to m_buffer
-				Memory<byte> m_data = m_buffer.Slice(0, data.DBSize);
-				_sha256.Transform(m_data.Span);
-				_sha256.Finalize(_header.HashCore.Span);
-				_bcs.WriteFast(m_data.Span);
-				DBHeaderIO.UpdateHash(_bcs, _header); //update hash after adding
-				_data.Add(data.Id, data); //finally add to dictionary
-			}
-			finally
-			{
-				_sha256.Initialize();
-				ZeroOut(m_buffer.Span);
-			}
-		}
+		//public async Task AddIDataAsync(IData data)
+		//{
+		//	Memory<byte> m_buffer = _buffer;
+		//	try
+		//	{
+		//		//prehash
+		//		await ComputeHash().ConfigureAwait(false);
+		//		using (SHA256 tmp_sha256 = _sha256.Clone())
+		//		{
+		//			Memory<byte> m_tmpHashBuffer = m_buffer.Slice(0, DBHeader.Layout.HashSize);
+		//			tmp_sha256.Finalize(m_tmpHashBuffer.Span);
+		//			if (!m_tmpHashBuffer.Span.SequenceEqual(_header.Hash.Span))
+		//			{
+		//				throw new DataBaseWrongHashException();
+		//			}
+		//		}
+
+		//		//prepare data
+
+		//		//IData data = DataCreator.InitIData(dataBox, m_buffer.Span); //create IData and write it to m_buffer
+		//		int dataSize = data.CopyTo(m_buffer.Span);
+		//		Memory<byte> m_data = m_buffer.Slice(0, dataSize);
+
+		//		//finish hash
+		//		_sha256.Transform(m_data.Span);
+		//		_sha256.Finalize(_header.HashCore.Span);
+
+		//		//write to bcs and update hash
+		//		_bcs.WriteFast(m_data.Span);
+		//		DBHeaderIO.UpdateHash(_bcs, _header); //update hash after adding
+
+		//		_data.Add(data.Id, data); //finally add to dictionary
+		//	}
+		//	finally
+		//	{
+		//		_sha256.Initialize();
+		//		MemoryHelper.ZeroOut(m_buffer.Span); //full size cauze buffer can contain decrypted bytes from Hash phase
+		//	}
+		//}
 
 		/// <summary>
 		/// Read BCS into SHA256, but dont finalize it.
 		/// </summary>
 		/// <returns></returns>
-		private async Task ComputeHash()
-		{
-			Memory<byte> m_buffer = _buffer;
-			await DBHeaderIO.ComputeDBHeaderHashAsync(_bcs, m_buffer, _sha256).ConfigureAwait(false);
-			await DataIO.ComputeDatasHashAsync(_bcs, m_buffer, _sha256).ConfigureAwait(false);
-		}
+		//private async Task ComputeHash()
+		//{
+		//	Memory<byte> m_buffer = _buffer;
+		//	await DBHeaderIO.ComputeDBHeaderHashAsync(_bcs, m_buffer, _sha256).ConfigureAwait(false);
+		//	await DataIO.ComputeDatasHashAsync(_bcs, m_buffer, _sha256).ConfigureAwait(false);
+		//}
 
 		public void Dispose()
 		{

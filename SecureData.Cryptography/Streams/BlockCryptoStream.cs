@@ -106,17 +106,11 @@ namespace SecureData.Cryptography.Streams
 		{
 			ThrowIfWrongCount(buffer.Length);
 			var sharedBuffer = ArrayPool<byte>.Shared.Rent(buffer.Length);
-			Span<byte> buff = sharedBuffer.AsSpan(0, buffer.Length);
-			try
-			{
-				_aes.Transform(buffer, buff, CTR);
-				_baseStream.Write(buff);
-				UpdateCTR();
-			}
-			finally
-			{
-				ArrayPool<byte>.Shared.Return(sharedBuffer);
-			}
+			Span<byte> s_encryptedBuffer = sharedBuffer.AsSpan(0, buffer.Length);
+			_aes.Transform(buffer, s_encryptedBuffer, CTR);
+			_baseStream.Write(s_encryptedBuffer);
+			UpdateCTR();
+			ArrayPool<byte>.Shared.Return(sharedBuffer);
 		}
 		public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
 		public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)

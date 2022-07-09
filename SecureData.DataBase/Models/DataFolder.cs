@@ -1,4 +1,6 @@
-﻿namespace SecureData.DataBase.Models
+﻿using System.Runtime.InteropServices;
+
+namespace SecureData.DataBase.Models
 {
 	public sealed class DataFolder : IEncryptedData
 	{
@@ -10,56 +12,51 @@
 			public const int DescriptionOffset = NameOffset + NameSize;
 			public const int DescriptionSize = 256;
 
-			public new const int Size = DescriptionOffset + DescriptionSize;
+			public new const int Size = DescriptionOffset + DescriptionSize; //from IData
 
 			public const int RNGOffset = Size;
 			public const int RNGSize = 11;
 
-			public new const int DBSize = RNGOffset + RNGSize;
+			public new const int DBSize = RNGOffset + RNGSize; //from LayoutBase
+			public new const int EncryptionStart = RNGOffset; //from IEncryptedData
 		}
 
-		#region IData
-		public ReadOnlyMemory<byte> Hash { get; }
-		public DataType DataType => DataType.DataFolder;
-		public uint Id { get; }
-		public IData? Parent { get; }
-		public DateTime TimeStamp { get; }
-		public int DBSize => Layout.DBSize;
-		#endregion
+		private readonly Raw _raw;
+		public int CopyTo(Span<byte> buffer)
+		{
+			ReadOnlySpan<byte> rawBytes = MemoryHelper.StructToReadOnlySpan(in _raw);
+			rawBytes.CopyTo(buffer);
+			return rawBytes.Length;
+		}
 
-		#region IEncryptedData
-		public bool IsEncrypted { get; }
-		public ReadOnlyMemory<byte> Salt { get; }
-		#endregion
+		public uint Id => _raw.Id;
 
-		#region DataFolder
-		public string Name { get; }
-		public string Description { get; }
-		#endregion
+		[StructLayout(LayoutKind.Explicit, Pack = 1)]
+		internal unsafe struct Raw
+		{
+			[FieldOffset(Layout.HashOffset)]
+			public fixed byte Hash[Layout.HashSize];
+			[FieldOffset(Layout.DataTypeOffset)]
+			public DataType DataType;
+			[FieldOffset(Layout.IdOffset)]
+			public UInt32 Id;
+			[FieldOffset(Layout.ParentIdOffset)]
+			public UInt32 ParentId;
+			[FieldOffset(Layout.TimeStampOffset)]
+			public Int64 TimeStamp;
 
-		#region Other (RAM)
-		private readonly Dictionary<uint, IData> _items;
-		public int Count => _items.Count;
-		#endregion
-	}
+			[FieldOffset(Layout.IsEncryptedOffset)]
+			public bool IsEncrypted;
+			[FieldOffset(Layout.SaltOffset)]
+			public fixed byte Salt[Layout.SaltSize];
 
-	public class DataFolderBox : IEncryptedDataBox
-	{
-		#region IDataBox
-		public DataType DataType { get; set; }
-		public IData? Parent { get; set; }
-		public EncryptionChain? EncryptionChain { get; set; }
-		#endregion
+			[FieldOffset(Layout.NameOffset)]
+			public fixed byte Name[Layout.NameSize];
+			[FieldOffset(Layout.DescriptionOffset)]
+			public fixed byte Description[Layout.DescriptionSize];
 
-		#region IEncryptedDataBox
-		public bool IsEncrypted { get; set; }
-		public ReadOnlyMemory<byte>? Salt { get; set; }
-		public ReadOnlyMemory<byte>? Key { get; set; }
-		#endregion
-
-		#region DataFolderBox
-		public string Name { get; set; }
-		public string Description { get; set; }
-		#endregion
+			[FieldOffset(Layout.RNGOffset)]
+			public fixed byte RNG[Layout.RNGSize];
+		}
 	}
 }

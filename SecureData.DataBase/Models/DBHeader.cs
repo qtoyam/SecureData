@@ -1,5 +1,9 @@
-﻿namespace SecureData.DataBase.Models
+﻿using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
+namespace SecureData.DataBase.Models
 {
+	//TODO: version != currentVersion => do something
 	public class DBHeader
 	{
 		public class Layout : LayoutBase
@@ -21,23 +25,61 @@
 			public const int RNGOffset = Size;
 			public const int RNGSize = 11968;
 
-			public const int HashingStart = VersionOffset; //hash from version
+			public const int HashingStart = HashSize;
 			public const int EncryptionStart = RNGOffset; //encrypt from RNG
 
 			public new const int DBSize = Size + RNGSize;
 		}
-		public ReadOnlyMemory<byte> Hash => HashCore;
-		internal Memory<byte> HashCore { get; }
-		public uint Version { get; }
-		public ReadOnlyMemory<byte> Salt { get; }
-		public string Login { get; }
 
-		public DBHeader(Memory<byte> hash, uint version, ReadOnlyMemory<byte> salt, string login)
+		private Raw _raw = new();
+
+		public uint Version => _raw.Version;
+
+		//TODO: cache login somehow
+		public unsafe string Login
 		{
-			HashCore = hash;
-			Version = version;
-			Salt = salt;
-			Login = login;
+			get
+			{
+				fixed(byte* rawLogin_ptr = _raw.Login)
+				{
+					return StringHelper.GetStringFromNullTerminatedBytes(rawLogin_ptr);					
+				}
+			}
 		}
+
+		internal void Init(Span<byte> s_dbHeader, uint version, ReadOnlySpan<byte> salt, string login)
+		{
+			_raw.Version = version;
+			salt.CopyTo(GetSalt(s_dbHeader));
+			StringHelper.WriteWithRNG(GetLogin(s_dbHeader), login);
+		}
+
+
+		internal Span<byte> GetRaw() => MemoryHelper.StructToSpan(in _raw);
+		internal static Span<byte> GetSalt(Span<byte> raw) => raw.Slice(Layout.SaltOffset, Layout.SaltSize);
+		internal static Span<byte> GetHash(Span<byte> raw) => raw.Slice(Layout.HashOffset, Layout.HashSize);
+		internal static Span<byte> GetLogin(Span<byte> raw) => raw.Slice(Layout.LoginOffset, Layout.LoginSize);
+
+
+
+		[StructLayout(LayoutKind.Explicit, Pack = 1)]
+		internal unsafe struct Raw
+		{
+			[FieldOffset(Layout.HashOffset)]
+			public fixed byte Hash[Layout.HashSize];
+			[FieldOffset(Layout.VersionOffset)]
+			public UInt32 Version;
+			[FieldOffset(Layout.SaltOffset)]
+			public fixed byte Salt[Layout.SaltSize];
+			[FieldOffset(Layout.LoginOffset)]
+			public fixed byte Login[Layout.LoginSize];
+		}
+
+#if DEBUG
+		public Span<byte> GetRawDebug() => GetRaw();
+		public static Span<byte> GetSaltDebug(Span<byte> raw) => GetSalt(raw);
+		public static Span<byte> GetHashDebug(Span<byte> raw) => GetHash(raw);
+		//public static Span<byte> GetLoginDebug(Span<byte> raw) => GetLogin(raw);
+#endif
 	}
 }

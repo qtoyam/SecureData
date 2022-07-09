@@ -1,4 +1,6 @@
-﻿using SecureData.Cryptography.Hash;
+﻿using System.Text;
+
+using SecureData.Cryptography.Hash;
 using SecureData.Cryptography.Streams;
 using SecureData.Cryptography.SymmetricEncryption;
 using SecureData.DataBase.Models;
@@ -8,9 +10,9 @@ namespace SecureData.Tests.DataBase.DB
 	public class CreateTests
 	{
 		[Fact]
-		public async Task CreateAsync_NoData()
+		public void Create_NoData()
 		{
-			string path = $"{nameof(CreateAsync_NoData)}TMP0.tmp";
+			string path = $"{nameof(Create_NoData)}TMP0.tmp";
 			try
 			{
 				byte[] key = new byte[Aes256Ctr.KeySize];
@@ -20,11 +22,12 @@ namespace SecureData.Tests.DataBase.DB
 				r.NextBytes(key);
 				r.NextBytes(expected_Salt);
 				string expected_Login = "MY LOGIN йй123*%№@#!%S";
-				using (var db = await SecureData.DataBase.DB.CreateAsync(path, key, expected_Salt, expected_Login))
+				using (var db = SecureData.DataBase.DB.Create(path, key, expected_Salt, expected_Login))
 				{
-					AssertExt.Equal(expected_Salt, db._header.Salt);
+					var raw = db._header.GetRawDebug();
+					AssertExt.Equal(expected_Salt, DBHeader.GetSaltDebug(raw));
 					Assert.Equal(expected_Login, db._header.Login);
-					actual_Hash = db._header.Hash.ToArray();
+					actual_Hash = DBHeader.GetHashDebug(raw).ToArray();
 				}
 				using (FileStream fs = new(path, FileMode.Open))
 				{

@@ -1,117 +1,84 @@
-﻿using System;
-
-using SecureData.Cryptography.Hash;
+﻿using SecureData.Cryptography.Hash;
 using SecureData.Cryptography.Streams;
-using SecureData.DataBase.Exceptions;
 using SecureData.DataBase.Models;
 
 namespace SecureData.DataBase.ModelsIO
 {
 	internal static class DBHeaderIO
 	{
-		public static DBHeader Read(Stream stream, Span<byte> s_buffer, SHA256 sha256)
-		{
-			s_buffer = s_buffer.Slice(0, DBHeader.Layout.Size);
-			if (stream.Length < DBHeader.Layout.DBSize)
-			{
-				throw DataBaseCorruptedException.WrongDBHeader();
-			}
-			//assume dbheader always starts at 0 pos
-			stream.Position = 0;
-			stream.Read(s_buffer);
-
-			//hash data from dbheader (without RNG)
-			//note: not worth parallel, cauze low size
-			sha256.Transform(s_buffer.Slice(DBHeader.Layout.HashingStart));
-			Memory<byte> hash = new byte[DBHeader.Layout.HashSize];
-			s_buffer.Slice(DBHeader.Layout.HashOffset, DBHeader.Layout.HashSize).CopyTo(hash.Span);
-
-			uint version = BitConverter.ToUInt32(s_buffer.Slice(DBHeader.Layout.VersionOffset));
-
-			Memory<byte> salt = new byte[DBHeader.Layout.SaltSize];
-			s_buffer.Slice(DBHeader.Layout.SaltOffset, DBHeader.Layout.SaltSize).CopyTo(salt.Span);
-
-			string login = StringHelper.GetStringFromNullTerminatedBytes(
-				  s_buffer.Slice(DBHeader.Layout.LoginOffset, DBHeader.Layout.LoginSize));
-
-			return new DBHeader(hash, version, salt, login);
-		}
-		public static async Task ComputeRNGHashAsync(BlockCryptoStream bcs, Memory<byte> m_buffer, SHA256 sha256)
+		public static void FillRNG(BlockCryptoStream bcs, Span<byte> s_buffer, SHA256 sha256)
 		{
 			bcs.Position = DBHeader.Layout.RNGOffset;
-			int fullRuns = DBHeader.Layout.RNGSize / m_buffer.Length;
-			for (int i = 0; i < fullRuns; i++)
+			if (s_buffer.Length >= DBHeader.Layout.RNGSize) //we can fit rng into buffer
 			{
-				await bcs.ReadAsync(m_buffer).ConfigureAwait(false);
-				sha256.Transform(m_buffer.Span);
-			}
-			//note: if buffer.length > RNGSize, this will be equal to RNGSize
-			int remainingRunSize = DBHeader.Layout.RNGSize % m_buffer.Length;
-			if (remainingRunSize > 0)
-			{
-				Memory<byte> remainingRun = m_buffer.Slice(0, remainingRunSize);
-				await bcs.ReadAsync(remainingRun).ConfigureAwait(false);
-				sha256.Transform(remainingRun.Span);
-			}
-		}
-		public static void WriteReal(BlockCryptoStream bcs, DBHeader dbHeader, Span<byte> s_buffer, SHA256 sha256)
-		{
-			bcs.Position = 0;
-			s_buffer = s_buffer.Slice(0, DBHeader.Layout.Size);
-			BinaryHelper.Write(s_buffer.Slice(DBHeader.Layout.HashOffset), dbHeader.Hash.Span); //hash
-			BinaryHelper.Write(s_buffer.Slice(DBHeader.Layout.VersionOffset), dbHeader.Version); //version
-			BinaryHelper.Write(s_buffer.Slice(DBHeader.Layout.SaltOffset), dbHeader.Salt.Span); //salt
-			StringHelper.Write(s_buffer.Slice(DBHeader.Layout.LoginOffset),
-				dbHeader.Login, DBHeader.Layout.LoginSize); //login
-
-			sha256.Transform(s_buffer.Slice(DBHeader.Layout.HashingStart));
-			bcs.WriteThroughEncryption(s_buffer);
-		}
-		public static async Task WriteRNGAsync(BlockCryptoStream bcs, Memory<byte> m_buffer, SHA256 sha256)
-		{
-			bcs.Position = DBHeader.Layout.RNGOffset;
-			if (m_buffer.Length > DBHeader.Layout.RNGSize) //we can fit rng into buffer
-			{
-				m_buffer = m_buffer.Slice(0, DBHeader.Layout.RNGSize);
-				Utils.RNG(m_buffer.Span);
-				sha256.Transform(m_buffer.Span);
-				await bcs.WriteFastAsync(m_buffer).ConfigureAwait(false);
+				s_buffer = s_buffer.Slice(0, DBHeader.Layout.RNGSize);
+				MemoryHelper.RNG(s_buffer);
+				sha256.Transform(s_buffer);
+				bcs.WriteFast(s_buffer);
 			}
 			else
 			{
 				int remainingRNG = DBHeader.Layout.RNGSize;
 				//loop full m_buffer's size blocks
-				for (; remainingRNG > m_buffer.Length; remainingRNG -= m_buffer.Length)
+				for (; remainingRNG > s_buffer.Length; remainingRNG -= s_buffer.Length)
 				{
-					Utils.RNG(m_buffer.Span);
-					sha256.Transform(m_buffer.Span);
-					await bcs.WriteFastAsync(m_buffer).ConfigureAwait(false);
+					MemoryHelper.RNG(s_buffer);
+					sha256.Transform(s_buffer);
+					bcs.WriteFast(s_buffer);
 				}
 				// if m_buffer's size is not multiple of DBHeader's size
 				if (remainingRNG > 0)
 				{
-					Memory<byte> m_remaining = m_buffer.Slice(0, remainingRNG);
-					Utils.RNG(m_remaining.Span);
-					sha256.Transform(m_remaining.Span);
-					await bcs.WriteFastAsync(m_remaining).ConfigureAwait(false);
+					Span<byte> s_remaining = s_buffer.Slice(0, remainingRNG);
+					MemoryHelper.RNG(s_remaining);
+					sha256.Transform(s_remaining);
+					bcs.WriteFast(s_remaining);
 				}
 			}
 		}
-
-		public static async Task ComputeDBHeaderHashAsync(BlockCryptoStream bcs, Memory<byte> m_buffer, SHA256 sha256)
+		public static void Write(BlockCryptoStream bcs, ReadOnlySpan<byte> s_dbHeader)
 		{
-			bcs.Position = DBHeader.Layout.HashingStart;
-			{
-				Memory<byte> m_noEncryptBuffer = m_buffer.Slice(0, DBHeader.Layout.EncryptionStart);
-				bcs.ReadThroughEncryption(m_noEncryptBuffer.Span);
-				sha256.Transform(m_noEncryptBuffer.Span);
-			}
-			await ComputeRNGHashAsync(bcs, m_buffer, sha256).ConfigureAwait(false);
+			bcs.Position = 0;
+			bcs.WriteThroughEncryption(s_dbHeader);
 		}
-		public static void UpdateHash(BlockCryptoStream bcs, DBHeader dbHeader)
+		public static void WriteHash(BlockCryptoStream bcs, ReadOnlySpan<byte> hash)
 		{
 			bcs.Position = DBHeader.Layout.HashOffset;
-			bcs.WriteThroughEncryption(dbHeader.Hash.Span);
+			bcs.WriteThroughEncryption(hash);
 		}
+		public static void ComputeHash(ReadOnlySpan<byte> s_dbHeader, SHA256 sha256)
+		{
+			sha256.Transform(s_dbHeader.Slice(DBHeader.Layout.HashingStart));
+		}
+
+		//public static async Task ComputeDBHeaderHashAsync(BlockCryptoStream bcs, Memory<byte> m_buffer, SHA256 sha256)
+		//{
+		//	bcs.Position = DBHeader.Layout.HashingStart;
+		//	{
+		//		Memory<byte> m_noEncryptBuffer = m_buffer.Slice(0, DBHeader.Layout.EncryptionStart);
+		//		bcs.ReadThroughEncryption(m_noEncryptBuffer.Span);
+		//		sha256.Transform(m_noEncryptBuffer.Span);
+		//	}
+		//	await ComputeRNGHashAsync(bcs, m_buffer, sha256).ConfigureAwait(false);
+		//}
+		public static void ComputeRNGHash(BlockCryptoStream bcs, Span<byte> s_buffer, SHA256 sha256)
+		{
+			bcs.Position = DBHeader.Layout.RNGOffset;
+			int fullRuns = DBHeader.Layout.RNGSize / s_buffer.Length;
+			for (int i = 0; i < fullRuns; i++)
+			{
+				bcs.Read(s_buffer);
+				sha256.Transform(s_buffer);
+			}
+			//note: if buffer.length > RNGSize, this will be equal to RNGSize
+			int remainingRunSize = DBHeader.Layout.RNGSize % s_buffer.Length;
+			if (remainingRunSize > 0)
+			{
+				Span<byte> s_remainingRun = s_buffer.Slice(0, remainingRunSize);
+				bcs.Read(s_remainingRun);
+				sha256.Transform(s_remainingRun);
+			}
+		}
+
 	}
 }

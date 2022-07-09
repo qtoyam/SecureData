@@ -54,6 +54,7 @@ namespace SecureData.Tests.Cryptography.Hash.SHA256
 		{
 			SHA256CS.Dispose();
 			SHA256MY.Dispose();
+			GC.SuppressFinalize(this);
 		}
 
 		private void Test(int size, int bpb)

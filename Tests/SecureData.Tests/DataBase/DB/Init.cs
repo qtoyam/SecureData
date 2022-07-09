@@ -15,9 +15,9 @@ namespace SecureData.Tests.DataBase.DB
 	public class InitTests
 	{
 		[Fact]
-		public async Task InitAsync_NoData()
+		public void Init_NoData()
 		{
-			string path = $"{nameof(InitAsync_NoData)}TMP0.tmp";
+			string path = $"{nameof(Init_NoData)}TMP0.tmp";
 			try
 			{
 				byte[] fileData = new byte[DBHeader.Layout.DBSize];
@@ -45,17 +45,18 @@ namespace SecureData.Tests.DataBase.DB
 				}
 				File.WriteAllBytes(path, fileData);
 
-				var db = await SecureData.DataBase.DB.InitAsync(path, key);
-				db.Dispose();
-				File.Delete(path);
-				AssertExt.Equal(expected_Hash, db._header.Hash); //hash
-				Assert.Equal(expected_Version, db._header.Version); //version
-				AssertExt.Equal(expected_Salt, db._header.Salt); //salt
-				Assert.Equal(expected_Login, db._header.Login); //login
+				using (var db = SecureData.DataBase.DB.Init(path, key))
+				{
+					var raw = db._header.GetRawDebug();
+					AssertExt.Equal(expected_Hash, DBHeader.GetHashDebug(raw)); //hash
+					Assert.Equal(expected_Version, db._header.Version); //version
+					AssertExt.Equal(expected_Salt, DBHeader.GetSaltDebug(raw)); //salt
+					Assert.Equal(expected_Login, db._header.Login); //login
+				}
 			}
 			finally
 			{
-				if(File.Exists(path))
+				if (File.Exists(path))
 				{
 					File.Delete(path);
 				}
@@ -63,17 +64,25 @@ namespace SecureData.Tests.DataBase.DB
 		}
 
 		[Fact]
-		public async Task InitAsync_WrongHash()
+		public void Init_WrongHash()
 		{
-			string path = $"{nameof(InitAsync_WrongHash)}.tmp";
-			byte[] fileData = new byte[DBHeader.Layout.DBSize];
-			File.WriteAllBytes(path, fileData);
-			await Assert.ThrowsAsync<SecureData.DataBase.Exceptions.DataBaseWrongHashException>(
-				async () =>
+			string path = $"{nameof(Init_WrongHash)}.tmp";
+			try
+			{
+				byte[] fileData = new byte[DBHeader.Layout.DBSize];
+				File.WriteAllBytes(path, fileData);
+				Assert.Throws<SecureData.DataBase.Exceptions.DataBaseWrongHashException>(
+					  () =>
+					  SecureData.DataBase.DB.Init(path, new byte[Aes256Ctr.KeySize]).Dispose()
+					  );
+			}
+			finally
+			{
+				if (File.Exists(path))
 				{
-					await SecureData.DataBase.DB.InitAsync(path, new byte[Aes256Ctr.KeySize]);
-				});
-			File.Delete(path);
+					File.Delete(path);
+				}
+			}
 		}
 	}
 }

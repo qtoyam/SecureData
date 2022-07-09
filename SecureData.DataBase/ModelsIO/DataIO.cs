@@ -26,28 +26,7 @@ namespace SecureData.DataBase.ModelsIO
 			return null;
 		}
 
-		public static void WriteToBuffer(IDataBox dataBox, Span<byte> s_buffer)
-		{
-			Span<byte> working;
-
-			//DataType
-			working = s_buffer.Slice(IData.Layout.DataTypeOffset);
-			BinaryHelper.Write(working, (uint)dataBox.DataType);
-
-			//Id
-			working = s_buffer.Slice(IData.Layout.IdOffset);
-			BinaryHelper.Write(working, dataBox.Id);
-
-			//Parent
-			working = s_buffer.Slice(IData.Layout.ParentIdOffset);
-			BinaryHelper.Write(working, dataBox.Parent?.Id ?? 0U);
-
-			//TimeStamp
-			working = s_buffer.Slice(IData.Layout.TimeStampOffset);
-			BinaryHelper.Write(working, dataBox.TimeStamp.ToBinary());
-		}
-
-		public static async Task<Dictionary<uint, IData>> ReadIDatasAsync(BlockCryptoStream bcs, Memory<byte> m_buffer, SHA256 sha256)
+		public static Dictionary<uint, IData> ReadAllIData(BlockCryptoStream bcs, Span<byte> s_buffer, SHA256 sha256)
 		{
 			Dictionary<uint, IData> items = new();
 			//assume data starts right after DBHeader
@@ -56,14 +35,14 @@ namespace SecureData.DataBase.ModelsIO
 			int bytesRead;
 			while (
 				//read full buffer except existingBytes
-				(bytesRead = await bcs.ReadAsync(m_buffer.Slice(existingBytes)).ConfigureAwait(false))
+				(bytesRead = bcs.Read(s_buffer.Slice(existingBytes)))
 				> 0)
 			{
 				//TODO: parallel hash with semaphores
 				//note: hash only read bytes except hashed already(existingBytes)
-				sha256.Transform(m_buffer.Span.Slice(existingBytes, bytesRead - existingBytes));
+				sha256.Transform(s_buffer.Slice(existingBytes, bytesRead - existingBytes));
 				int readTo;
-				if (bytesRead == (m_buffer.Length - existingBytes)) //current buffer filled, so assume there is extra bytes in BCS
+				if (bytesRead == (s_buffer.Length - existingBytes)) //current buffer filled, so assume there is extra bytes in BCS
 				{
 					readTo = LayoutBase.MaxDataSize; //read while we sure that current buffer is enough to complete any DataType
 				}
@@ -71,22 +50,22 @@ namespace SecureData.DataBase.ModelsIO
 				{
 					readTo = 0; //read all buffer
 				}
-				ReadOnlyMemory<byte> m_currentBuffer = m_buffer;
+				ReadOnlySpan<byte> s_currentBuffer = s_buffer;
 
-				while (m_currentBuffer.Length >= readTo)
+				while (s_currentBuffer.Length >= readTo)
 				{
-					IData? data = ReadIData(m_currentBuffer.Span, out int br);
+					IData? data = ReadIData(s_currentBuffer, out int br);
 					if (data != null) //not deleted
 					{
 						items.Add(data.Id, data);
 					}
-					m_currentBuffer = m_currentBuffer.Slice(br);
+					s_currentBuffer = s_currentBuffer.Slice(br);
 				}
-				if (m_currentBuffer.Length != 0)
+				if (s_currentBuffer.Length != 0)
 				{
 					// will throw in ReadIData if not readTo == 0
-					m_currentBuffer.CopyTo(m_buffer); //copy for next iteration
-					existingBytes = m_currentBuffer.Length; //dont read/hash this region again
+					s_currentBuffer.CopyTo(s_buffer); //copy for next iteration
+					existingBytes = s_currentBuffer.Length; //dont read/hash this region again
 				}
 				else
 				{

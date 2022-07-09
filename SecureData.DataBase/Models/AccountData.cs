@@ -1,4 +1,7 @@
-﻿namespace SecureData.DataBase.Models
+﻿using System;
+using System.Runtime.InteropServices;
+
+namespace SecureData.DataBase.Models
 {
 	internal sealed class AccountData : IEncryptedData
 	{
@@ -16,76 +19,56 @@
 			public const int PasswordOffset = LoginOffset + LoginSize;
 			public const int PasswordSize = 128;
 
-
-			public new const int Size = PasswordOffset + PasswordSize;
+			public new const int Size = PasswordOffset + PasswordSize; //from IData
 
 			public const int RNGOffset = Size;
-			public const int RNGSize = 11;
+			public const int RNGSize = 10;
 
-			public new const int DBSize = RNGOffset + RNGSize;
+			public new const int DBSize = RNGOffset + RNGSize; //from LayoutBase
+			public new const int EncryptionStart = LoginOffset; //from IEncryptedData
 		}
 
-		#region IData
-		public Memory<byte> Hash { get; }
-		public DataType DataType => DataType.AccountData;
-		public uint Id { get; }
-		public IData? Parent { get; }
-		public DateTime TimeStamp { get; }
-
-		public int DBSize => Layout.DBSize;
-		#endregion
-
-		#region IEncryptedData
-		public bool IsEncrypted { get; }
-		public ReadOnlyMemory<byte> Salt { get; }
-		#endregion
-
-		#region AccountData
-		public string Name { get; }
-		public string Description { get; }
-		public Memory<byte> Login { get; }
-		public Memory<byte> Password { get; }
-		#endregion
-
-		public AccountData(Memory<byte> hash, uint id, IData? parent, DateTime timeStamp, bool isEncrypted, ReadOnlyMemory<byte> salt,
-			string name, string description, Memory<byte> login, Memory<byte> password)
+		private readonly Raw _raw;
+		public int CopyTo(Span<byte> buffer)
 		{
-			Hash = hash;
-			Id = id;
-			Parent = parent;
-			TimeStamp = timeStamp;
-			IsEncrypted = isEncrypted;
-			Salt = salt;
-			Name = name;
-			Description = description;
-			Login = login;
-			Password = password;
+			ReadOnlySpan<byte> rawBytes = MemoryHelper.StructToReadOnlySpan(in _raw);
+			rawBytes.CopyTo(buffer);
+			return rawBytes.Length;
 		}
-	}
 
-	public sealed class AccountDataBox : IEncryptedDataBox
-	{
-		#region IDataBox
-		public DataType DataType { get; }
-		public uint Id { get; set; }
-		public IDataBox? Parent { get; set; }
-		public EncryptionChain? EncryptionChain { get; set; }
-		#endregion
+		public uint Id => _raw.Id;
 
-		#region IEncryptedDataBox
-		public bool IsEncrypted { get; set; }
-		public Memory<byte> Salt { get; set; }
-		public ReadOnlyMemory<byte> Key { get; set; }
-		#endregion
+		[StructLayout(LayoutKind.Explicit, Pack = 1)]
+		internal unsafe struct Raw
+		{
+			[FieldOffset(Layout.HashOffset)]
+			public fixed byte Hash[Layout.HashSize];
+			[FieldOffset(Layout.DataTypeOffset)]
+			public DataType DataType;
+			[FieldOffset(Layout.IdOffset)]
+			public UInt32 Id;
+			[FieldOffset(Layout.ParentIdOffset)]
+			public UInt32 ParentId;
+			[FieldOffset(Layout.TimeStampOffset)]
+			public Int64 TimeStamp;
 
-		#region AccountDataBox
-		public string Name { get; set; }
-		public string Login { get; set; }
-		public string Password { get; set; }
-		public string Description { get; set; }
-		public DateTime TimeStamp { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+			[FieldOffset(Layout.IsEncryptedOffset)]
+			public bool IsEncrypted;
+			[FieldOffset(Layout.SaltOffset)]
+			public fixed byte Salt[Layout.SaltSize];
 
-		IData? IDataBox.Original { get; set; }
-		#endregion
+			[FieldOffset(Layout.NameOffset)]
+			public fixed byte Name[Layout.NameSize];
+			[FieldOffset(Layout.DescriptionOffset)]
+			public fixed byte Description[Layout.DescriptionSize];
+			[FieldOffset(Layout.LoginOffset)]
+			public fixed byte Login[Layout.LoginSize];
+			[FieldOffset(Layout.PasswordOffset)]
+			public fixed byte Password[Layout.PasswordSize];
+
+			[FieldOffset(Layout.RNGOffset)]
+			public fixed byte RNG[Layout.RNGSize];
+		}
+
 	}
 }

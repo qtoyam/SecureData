@@ -32,7 +32,7 @@ namespace SecureData.DataBase.Models
 
 		public static readonly int MaxDataSize;
 
-		public const int DBSize = 0;
+		protected const int DBSize = -1;
 		public const int MultipleOf = Cryptography.SymmetricEncryption.Aes256Ctr.BlockSize;
 	}
 }
