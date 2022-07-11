@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace SecureData.Cryptography.SymmetricEncryption
 {
-	public sealed class Aes256Ctr : IDisposable
+	public class AesCTR : IDisposable
 	{
 		#region Consts
 		public const int BlockSize = 16;
@@ -14,11 +14,14 @@ namespace SecureData.Cryptography.SymmetricEncryption
 
 		private readonly AesSafeHandle _handle;
 
-		public Aes256Ctr()
+		public uint Counter { get; set; }
+
+		public AesCTR()
 		{
 			Native.AES_CreateHandle(out _handle);
+			Counter = 0;
 		}
-		public Aes256Ctr(ReadOnlySpan<byte> key, ReadOnlySpan<byte> iv) : this()
+		public AesCTR(ReadOnlySpan<byte> key, ReadOnlySpan<byte> iv) : this()
 		{
 			SetKeyIV(key, iv);
 		}
@@ -56,6 +59,7 @@ namespace SecureData.Cryptography.SymmetricEncryption
 			SetIV(iv);
 			SetKey(key);
 		}
+
 		public void Transform(ReadOnlySpan<byte> input, Span<byte> output, uint initialCounter)
 		{
 			if (input.Length != output.Length)
@@ -96,7 +100,35 @@ namespace SecureData.Cryptography.SymmetricEncryption
 				}
 			}
 		}
-		public void Dispose() => _handle.Dispose();
+		public void TransformBlock(Span<byte> input, uint initialCounter)
+		{
+			TransformBlock(input, input, initialCounter);
+		}
+
+		public void Transform(ReadOnlySpan<byte> input, Span<byte> output)
+		{
+			Transform(input, output, Counter);
+			Counter += ((uint)input.Length) >> BlockSizeShift;
+		}
+		public void Transform(Span<byte> input)
+		{
+			Transform(input, input);
+		}
+		public void TransformBlock(ReadOnlySpan<byte> input, Span<byte> output)
+		{
+			TransformBlock(input, output, Counter);
+			++Counter;
+		}
+		public void TransformBlock(Span<byte> input)
+		{
+			TransformBlock(input, input);
+		}
+
+		public void Dispose()
+		{
+			_handle.Dispose();
+			GC.SuppressFinalize(this);
+		}
 
 		#region Helpers
 		public static bool IsValidSize(int size)
@@ -154,7 +186,7 @@ namespace SecureData.Cryptography.SymmetricEncryption
 
 			public static unsafe void AES_SetKey(AesSafeHandle handle, void* key)
 			{
-				if(System.Runtime.Intrinsics.X86.Aes.IsSupported)
+				if (System.Runtime.Intrinsics.X86.Aes.IsSupported)
 				{
 					AESNI_SetKey(handle, key);
 				}

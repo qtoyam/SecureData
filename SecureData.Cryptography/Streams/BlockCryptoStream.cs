@@ -15,16 +15,16 @@ namespace SecureData.Cryptography.Streams
 		private readonly Stream _baseStream;
 		private readonly bool _closeOnDispose;
 		private readonly bool _autoDisposeAes;
-		private readonly Aes256Ctr _aes;
+		private readonly AesCTR _aes;
 
 		private uint CTR { get; set; }
-		private void UpdateCTR() => CTR = (uint)(Position >> Aes256Ctr.BlockSizeShift);
+		private void UpdateCTR() => CTR = (uint)(Position >> AesCTR.BlockSizeShift);
 
-		public BlockCryptoStream(Stream baseStream, Aes256Ctr aes, bool autoDisposeAes, bool closeOnDispose = false)
+		public BlockCryptoStream(Stream baseStream, AesCTR aes, bool autoDisposeAes, bool closeOnDispose = false)
 		{
-			if (!Aes256Ctr.IsValidSize(baseStream.Length))
+			if (!AesCTR.IsValidSize(baseStream.Length))
 			{
-				throw new ArgumentException($"FileStream length is not dividable by block size: {Aes256Ctr.BlockSize}");
+				throw new ArgumentException($"FileStream length is not dividable by block size: {AesCTR.BlockSize}");
 			}
 			_baseStream = baseStream;
 			_closeOnDispose = closeOnDispose;
@@ -33,13 +33,13 @@ namespace SecureData.Cryptography.Streams
 			UpdateCTR(); //if baseStream position != 0
 		}
 		public BlockCryptoStream(Stream baseStream, ReadOnlySpan<byte> key, ReadOnlySpan<byte> iv, bool closeOnDispose = false)
-			: this(baseStream, new Aes256Ctr(key, iv), true, closeOnDispose: closeOnDispose)
+			: this(baseStream, new AesCTR(key, iv), true, closeOnDispose: closeOnDispose)
 		{ }
-		public BlockCryptoStream(string path, FileStreamOptions options, Aes256Ctr aes, bool autoDisposeAes)
+		public BlockCryptoStream(string path, FileStreamOptions options, AesCTR aes, bool autoDisposeAes)
 			: this(new FileStream(path, options), aes, autoDisposeAes, closeOnDispose: true)
 		{ }
 		public BlockCryptoStream(string path, FileStreamOptions options, ReadOnlySpan<byte> key, ReadOnlySpan<byte> iv)
-			: this(path, options, new Aes256Ctr(key, iv), true)
+			: this(path, options, new AesCTR(key, iv), true)
 		{ }
 
 		public override bool CanRead => _baseStream.CanRead;
@@ -66,9 +66,9 @@ namespace SecureData.Cryptography.Streams
 		}
 		public override void SetLength(long value)
 		{
-			if (!Aes256Ctr.IsValidSize(value))
+			if (!AesCTR.IsValidSize(value))
 			{
-				throw new ArgumentException($"Value is not dividable by block size: {Aes256Ctr.BlockSize}", nameof(value));
+				throw new ArgumentException($"Value is not dividable by block size: {AesCTR.BlockSize}", nameof(value));
 			}
 			if (value > Length)
 			{
@@ -176,16 +176,16 @@ namespace SecureData.Cryptography.Streams
 
 		private static void ThrowIfWrongPosition(long pos)
 		{
-			if (!Aes256Ctr.IsValidSize(pos))
+			if (!AesCTR.IsValidSize(pos))
 			{
-				throw new InvalidOperationException($"Position is not dividable by block size: {Aes256Ctr.BlockSize}");
+				throw new InvalidOperationException($"Position is not dividable by block size: {AesCTR.BlockSize}");
 			}
 		}
 		private static void ThrowIfWrongCount(int count)
 		{
-			if (!Aes256Ctr.IsValidSize(count))
+			if (!AesCTR.IsValidSize(count))
 			{
-				throw new InvalidOperationException($"Count is not dividable by block size: {Aes256Ctr.BlockSize}");
+				throw new InvalidOperationException($"Count is not dividable by block size: {AesCTR.BlockSize}");
 			}
 		}
 
