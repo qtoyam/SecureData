@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace SecureData.Cryptography.SymmetricEncryption
 {
-	public class AesCTR : IDisposable
+	public class Aes : IDisposable
 	{
 		#region Consts
 		public const int BlockSize = 16;
@@ -16,12 +16,12 @@ namespace SecureData.Cryptography.SymmetricEncryption
 
 		public uint Counter { get; set; }
 
-		public AesCTR()
+		public Aes()
 		{
 			Native.AES_CreateHandle(out _handle);
 			Counter = 0;
 		}
-		public AesCTR(ReadOnlySpan<byte> key, ReadOnlySpan<byte> iv) : this()
+		public Aes(ReadOnlySpan<byte> key, ReadOnlySpan<byte> iv) : this()
 		{
 			SetKeyIV(key, iv);
 		}

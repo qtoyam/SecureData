@@ -1,5 +1,6 @@
-﻿using System.Buffers;
-using System.Security.Cryptography;
+﻿using System;
+using System.Buffers;
+using System.Runtime.CompilerServices;
 
 using SecureData.Cryptography.SymmetricEncryption;
 
@@ -15,31 +16,34 @@ namespace SecureData.Cryptography.Streams
 		private readonly Stream _baseStream;
 		private readonly bool _closeOnDispose;
 		private readonly bool _autoDisposeAes;
-		private readonly AesCTR _aes;
+		private readonly Aes _aes;
 
-		private uint CTR { get; set; }
-		private void UpdateCTR() => CTR = (uint)(Position >> AesCTR.BlockSizeShift);
+		//TODO: remove this, cauze AesCTR have its own
+		//private uint CTR { get; set; }
+		//private void UpdateCTR() => CTR = (uint)(Position >> Aes.BlockSizeShift);
 
-		public BlockCryptoStream(Stream baseStream, AesCTR aes, bool autoDisposeAes, bool closeOnDispose = false)
+		private void UpdCTR() => _aes.Counter = (uint)(Position >> Aes.BlockSizeShift);
+
+		public BlockCryptoStream(Stream baseStream, Aes aes, bool autoDisposeAes, bool closeOnDispose = false)
 		{
-			if (!AesCTR.IsValidSize(baseStream.Length))
+			if (!Aes.IsValidSize(baseStream.Length))
 			{
-				throw new ArgumentException($"FileStream length is not dividable by block size: {AesCTR.BlockSize}");
+				throw new ArgumentException($"FileStream length is not dividable by block size: {Aes.BlockSize}");
 			}
 			_baseStream = baseStream;
 			_closeOnDispose = closeOnDispose;
 			_autoDisposeAes = autoDisposeAes;
 			_aes = aes;
-			UpdateCTR(); //if baseStream position != 0
+			UpdCTR(); //if baseStream position != 0
 		}
 		public BlockCryptoStream(Stream baseStream, ReadOnlySpan<byte> key, ReadOnlySpan<byte> iv, bool closeOnDispose = false)
-			: this(baseStream, new AesCTR(key, iv), true, closeOnDispose: closeOnDispose)
+			: this(baseStream, new Aes(key, iv), true, closeOnDispose: closeOnDispose)
 		{ }
-		public BlockCryptoStream(string path, FileStreamOptions options, AesCTR aes, bool autoDisposeAes)
+		public BlockCryptoStream(string path, FileStreamOptions options, Aes aes, bool autoDisposeAes)
 			: this(new FileStream(path, options), aes, autoDisposeAes, closeOnDispose: true)
 		{ }
 		public BlockCryptoStream(string path, FileStreamOptions options, ReadOnlySpan<byte> key, ReadOnlySpan<byte> iv)
-			: this(path, options, new AesCTR(key, iv), true)
+			: this(path, options, new Aes(key, iv), true)
 		{ }
 
 		public override bool CanRead => _baseStream.CanRead;
@@ -51,31 +55,32 @@ namespace SecureData.Cryptography.Streams
 			get => _baseStream.Position;
 			set
 			{
-				ThrowIfWrongPosition(value);
+				EnsurePosition(value);
 				_baseStream.Position = value;
-				UpdateCTR();
+				UpdCTR();
 			}
 		}
 
 		public override long Seek(long offset, SeekOrigin origin)
 		{
 			var pos = _baseStream.Seek(offset, origin);
-			ThrowIfWrongPosition(pos);
-			UpdateCTR();
+			EnsurePosition(pos);
+			UpdCTR();
 			return pos;
 		}
+
 		public override void SetLength(long value)
 		{
-			if (!AesCTR.IsValidSize(value))
+			if (!Aes.IsValidSize(value))
 			{
-				throw new ArgumentException($"Value is not dividable by block size: {AesCTR.BlockSize}", nameof(value));
+				throw new ArgumentException($"Length is not dividable by {nameof(Aes)} block size.", nameof(value));
 			}
 			if (value > Length)
 			{
 				throw new InvalidOperationException("Growing file without filling it is dangerous!");
 			}
 			_baseStream.SetLength(value);
-			UpdateCTR();
+			UpdCTR();
 		}
 
 		public override void Flush() => _baseStream.Flush();
@@ -83,51 +88,44 @@ namespace SecureData.Cryptography.Streams
 
 		public override int Read(Span<byte> buffer)
 		{
-			ThrowIfWrongCount(buffer.Length);
+			EnsureBuffer(buffer);
 			var res = _baseStream.Read(buffer);
-			_aes.Transform(buffer, CTR);
-			UpdateCTR();
+			_aes.Transform(buffer);
 			return res;
 		}
 		public override int Read(byte[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
-		public override int ReadByte() => throw new NotSupportedException();
 		public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
 		{
-			ThrowIfWrongCount(buffer.Length);
+			EnsureBuffer(buffer);
 			var res = await _baseStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
-			_aes.Transform(buffer.Span, CTR);
-			UpdateCTR();
+			_aes.Transform(buffer.Span);
 			return res;
 		}
-		public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
-			ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
-
+		public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+		{
+			EnsureBuffer((ReadOnlySpan<byte>)buffer);
+			var res = await _baseStream.ReadAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
+			_aes.Transform(buffer);
+			return res;
+		}
 		public override void Write(ReadOnlySpan<byte> buffer)
 		{
-			ThrowIfWrongCount(buffer.Length);
-			var sharedBuffer = ArrayPool<byte>.Shared.Rent(buffer.Length);
+			EnsureBuffer(buffer);
+			byte[] sharedBuffer = ArrayPool<byte>.Shared.Rent(buffer.Length);
 			Span<byte> s_encryptedBuffer = sharedBuffer.AsSpan(0, buffer.Length);
-			_aes.Transform(buffer, s_encryptedBuffer, CTR);
+			_aes.Transform(buffer, s_encryptedBuffer);
 			_baseStream.Write(s_encryptedBuffer);
-			UpdateCTR();
 			ArrayPool<byte>.Shared.Return(sharedBuffer);
 		}
 		public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
 		public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
 		{
-			ThrowIfWrongCount(buffer.Length);
-			var sharedBuffer = MemoryPool<byte>.Shared.Rent(buffer.Length);
-			Memory<byte> m_sharedBuffer = sharedBuffer.Memory.Slice(0, buffer.Length);
-			try
-			{
-				_aes.Transform(buffer.Span, m_sharedBuffer.Span, CTR);
-				await _baseStream.WriteAsync(m_sharedBuffer, cancellationToken).ConfigureAwait(false);
-				UpdateCTR();
-			}
-			finally
-			{
-				sharedBuffer.Dispose();
-			}
+			EnsureBuffer(buffer);
+			byte[] sharedBuffer = ArrayPool<byte>.Shared.Rent(buffer.Length);
+			Memory<byte> m_sharedBuffer = sharedBuffer.AsMemory(0, buffer.Length);
+			_aes.Transform(buffer.Span, m_sharedBuffer.Span);
+			await _baseStream.WriteAsync(m_sharedBuffer, cancellationToken).ConfigureAwait(false);
+			ArrayPool<byte>.Shared.Return(sharedBuffer);
 		}
 
 		/// <summary>
@@ -136,21 +134,19 @@ namespace SecureData.Cryptography.Streams
 		/// <param name="buffer"></param>
 		public void WriteFast(Span<byte> buffer)
 		{
-			ThrowIfWrongCount(buffer.Length);
-			_aes.Transform(buffer, CTR);
+			EnsureBuffer(buffer);
+			_aes.Transform(buffer);
 			_baseStream.Write(buffer);
-			UpdateCTR();
 		}
 		/// <summary>
 		/// Encrypt <paramref name="buffer"/> in-place and write it to stream asynchronously.
 		/// </summary>
 		/// <param name="buffer"></param>
-		public async ValueTask WriteFastAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+		public ValueTask WriteFastAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
 		{
-			ThrowIfWrongCount(buffer.Length);
-			_aes.Transform(buffer.Span, CTR);
-			await _baseStream.WriteAsync(buffer, cancellationToken).ConfigureAwait(false);
-			UpdateCTR();
+			EnsureBuffer(buffer);
+			_aes.Transform(buffer.Span);
+			return _baseStream.WriteAsync(buffer, cancellationToken);
 		}
 
 		/// <summary>
@@ -159,9 +155,9 @@ namespace SecureData.Cryptography.Streams
 		/// <param name="buffer"></param>
 		public void ReadThroughEncryption(Span<byte> buffer)
 		{
-			ThrowIfWrongCount(buffer.Length);
+			EnsureBuffer(buffer);
 			_baseStream.Read(buffer);
-			UpdateCTR();
+			UpdCTR();
 		}
 		/// <summary>
 		/// Write <paramref name="buffer"/> WITHOUT encryption.
@@ -169,23 +165,35 @@ namespace SecureData.Cryptography.Streams
 		/// <param name="buffer"></param>
 		public void WriteThroughEncryption(ReadOnlySpan<byte> buffer)
 		{
-			ThrowIfWrongCount(buffer.Length);
+			EnsureBuffer(buffer);
 			_baseStream.Write(buffer);
-			UpdateCTR();
+			UpdCTR();
 		}
+		public override int ReadByte() => throw new NotSupportedException();
+		public override void WriteByte(byte value) => throw new NotSupportedException();
 
-		private static void ThrowIfWrongPosition(long pos)
+		private static void EnsurePosition(long pos,
+			[CallerArgumentExpression("pos")] string pos_name = "")
 		{
-			if (!AesCTR.IsValidSize(pos))
+			if (!Aes.IsValidSize(pos))
 			{
-				throw new InvalidOperationException($"Position is not dividable by block size: {AesCTR.BlockSize}");
+				throw new ArgumentException($"Position is not dividable by {nameof(Aes)} block size.", pos_name);
 			}
 		}
-		private static void ThrowIfWrongCount(int count)
+		private static void EnsureBuffer(ReadOnlySpan<byte> buffer,
+			[CallerArgumentExpression("buffer")] string buffer_name = "")
 		{
-			if (!AesCTR.IsValidSize(count))
+			if (!Aes.IsValidSize(buffer.Length))
 			{
-				throw new InvalidOperationException($"Count is not dividable by block size: {AesCTR.BlockSize}");
+				throw new ArgumentException($"Length is not dividable by {nameof(Aes)} block size.", buffer_name);
+			}
+		}
+		private static void EnsureBuffer(ReadOnlyMemory<byte> buffer,
+			[CallerArgumentExpression("buffer")] string buffer_name = "")
+		{
+			if (!Aes.IsValidSize(buffer.Length))
+			{
+				throw new ArgumentException($"Length is not dividable by {nameof(Aes)} block size.", buffer_name);
 			}
 		}
 
