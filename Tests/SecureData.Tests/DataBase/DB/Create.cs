@@ -1,9 +1,6 @@
-﻿using System.Text;
-
-using SecureData.Cryptography.Hash;
+﻿using SecureData.Cryptography.Hash;
 using SecureData.Cryptography.Streams;
 using SecureData.Cryptography.SymmetricEncryption;
-using SecureData.DataBase.Models;
 
 namespace SecureData.Tests.DataBase.DB
 {
@@ -12,38 +9,36 @@ namespace SecureData.Tests.DataBase.DB
 		[Fact]
 		public void Create_NoData()
 		{
+			//TODO: here
 			string path = $"{nameof(Create_NoData)}TMP0.tmp";
 			try
 			{
-				byte[] key = new byte[Aes256Ctr.KeySize];
-				byte[] expected_Salt = new byte[DBHeader.Layout.SaltSize];
-				byte[] expected_Hash, actual_Hash;
+				byte[] key = new byte[Aes.KeySize];
+				byte[] iv = new byte[Aes.IVSize];
+				string login = "MY LOGIN@!#&*@!$*123123;'.lds";
 				Random r = new(42);
 				r.NextBytes(key);
-				r.NextBytes(expected_Salt);
-				string expected_Login = "MY LOGIN йй123*%№@#!%S";
-				using (var db = SecureData.DataBase.DB.Create(path, key, expected_Salt, expected_Login))
+				r.NextBytes(iv);
+				byte[] expected_Hash, actual_Hash;
+				string actual_Login;
+				using (var db = new SecureData.DataBase.DB(path, true))
 				{
-					var raw = db._header.GetRawDebug();
-					AssertExt.Equal(expected_Salt, DBHeader.GetSaltDebug(raw));
-					Assert.Equal(expected_Login, db._header.Login);
-					actual_Hash = DBHeader.GetHashDebug(raw).ToArray();
+					db.Create(key, iv, login);
+					actual_Hash = db.Hash.ToArray();
+					actual_Login = db.Login;
 				}
-				using (FileStream fs = new(path, FileMode.Open))
+				using (var bcs = new BlockCryptoStream(path,
+					  new FileStreamOptions() { Access = FileAccess.Read, Mode = FileMode.Open }, key, iv))
 				{
-					byte[] buffer = new byte[DBHeader.Layout.DBSize];
-					fs.Read(buffer.AsSpan(0, DBHeader.Layout.EncryptionStart));
-					using (BlockCryptoStream bcs = new(fs, key, expected_Salt))
-					{
-						bcs.Read(buffer.AsSpan(DBHeader.Layout.EncryptionStart));
-					}
-					using (SHA256 sha256 = new())
-					{
-						sha256.Transform(buffer.AsSpan(DBHeader.Layout.HashingStart));
-						expected_Hash = sha256.Finalize();
-					}
+					byte[] buffer = new byte[bcs.Length];
+					bcs.ReadThroughEncryption(buffer.AsSpan(0, Sizes.Size));
+					bcs.Read(buffer.AsSpan(Sizes.Size));
+					expected_Hash = SHA256.ComputeHash(buffer.AsSpan(Sizes.HashStart));
 				}
+
 				Assert.Equal(expected_Hash, actual_Hash);
+				Assert.Equal(login, actual_Login);
+
 			}
 			finally
 			{

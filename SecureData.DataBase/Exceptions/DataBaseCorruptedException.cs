@@ -8,8 +8,10 @@
 
 		}
 
-		public static DataBaseCorruptedException WrongDBHeader() => new("Wrong database header");
+		public static DataBaseCorruptedException WrongDBHeader() => new("Wrong database header.");
 
-		public static DataBaseCorruptedException WrongDBSize() => new("Wrong database size");
+		public static DataBaseCorruptedException WrongDBSize() => new("Wrong database size.");
+
+		public static DataBaseCorruptedException UnexpectedHash() => new("Unexpected wrong hash value.");
 	}
 }

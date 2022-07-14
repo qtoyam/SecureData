@@ -15,14 +15,14 @@ namespace SecureData.Tests.Cryptography.Streams.CryptoStream
 		static CryptoStreamTest()
 		{
 			Random r = new(42);
-			Key = new byte[Aes256Ctr.KeySize];
-			IV = new byte[Aes256Ctr.IVSize];
+			Key = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.KeySize];
+			IV = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.IVSize];
 			Data = new byte[DataSize];
 			DataEncrypted = new byte[DataSize];
 			r.NextBytes(Key);
 			r.NextBytes(IV);
 			r.NextBytes(Data);
-			using (var aes = new Aes256Ctr(Key, IV))
+			using (var aes = new SecureData.Cryptography.SymmetricEncryption.Aes(Key, IV))
 			{
 				aes.Transform(Data, DataEncrypted, 0);
 			}
@@ -35,17 +35,17 @@ namespace SecureData.Tests.Cryptography.Streams.CryptoStream
 			=> new(new MemoryStream(array), Key, IV, true);
 
 
-		protected readonly Aes256Ctr Aes;
+		protected readonly SecureData.Cryptography.SymmetricEncryption.Aes Aes;
 		public CryptoStreamTest()
 		{
-			Aes = new Aes256Ctr(Key, IV);
+			Aes = new SecureData.Cryptography.SymmetricEncryption.Aes(Key, IV);
 		}
 
 		public virtual void Dispose()
 		{
 			Random r = new(42);
-			Span<byte> key = new byte[Aes256Ctr.KeySize];
-			Span<byte> iv = new byte[Aes256Ctr.IVSize];
+			Span<byte> key = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.KeySize];
+			Span<byte> iv = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.IVSize];
 			Span<byte> data = new byte[DataSize];
 			r.NextBytes(key);
 			r.NextBytes(iv);
@@ -63,7 +63,7 @@ namespace SecureData.Tests.Cryptography.Streams.CryptoStream
 				throw new Exception("Data corrupted");
 			}
 
-			using (var taes = new Aes256Ctr(key, iv))
+			using (var taes = new SecureData.Cryptography.SymmetricEncryption.Aes(key, iv))
 			{
 				Span<byte> dataEncrypted = new byte[DataSize];
 				taes.Transform(data, dataEncrypted, 0);

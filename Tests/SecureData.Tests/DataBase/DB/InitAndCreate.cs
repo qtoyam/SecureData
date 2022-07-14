@@ -1,11 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-using SecureData.Cryptography.SymmetricEncryption;
-using SecureData.DataBase.Models;
+﻿using SecureData.Cryptography.SymmetricEncryption;
 
 namespace SecureData.Tests.DataBase.DB
 {
@@ -15,24 +8,39 @@ namespace SecureData.Tests.DataBase.DB
 		public void InitAndCreate_NoData()
 		{
 			string path = $"{nameof(InitAndCreate_NoData)}TMP0.tmp";
+			Span<byte> key = new byte[Aes.KeySize];
+			Span<byte> iv = new byte[Aes.IVSize];
+			string login = "MY LOGINn12377842189&^#&^@!89sa;as\"";
+			byte[] exp_hash, act_hash;
+			byte[] exp_salt, act_salt;
+			uint exp_version, act_version;
+			RNG(key, iv);
 			try
 			{
-				byte[] key = new byte[Aes256Ctr.KeySize];
-				byte[] expected_Salt = new byte[DBHeader.Layout.SaltSize];
-				Random r = new(42);
-				r.NextBytes(key);
-				r.NextBytes(expected_Salt);
-				string expected_Login = "MY LOGIN йй123*%№@#!%S";
-				using (var db = SecureData.DataBase.DB.Create(path, key, expected_Salt, expected_Login))
+				using(var db = new SecureData.DataBase.DB(path, true))
 				{
+					db.Create(key, iv,login);
+					exp_hash = db.Hash.ToArray();
+					exp_salt = db.Salt.ToArray();
+					exp_version = db.Version;
+				}
+				using(var db = new SecureData.DataBase.DB(path, false))
+				{
+					bool res = db.TryInit(key);
+					Assert.True(res);
+					Assert.Equal(login, db.Login);
+					act_hash = db.Hash.ToArray();
+					Assert.Equal(exp_hash, act_hash);
+					act_salt = db.Salt.ToArray();
+					Assert.Equal(exp_salt, act_salt);
+					act_version = db.Version;
+					Assert.Equal(exp_version, act_version);
 
 				}
-				using (var db = SecureData.DataBase.DB.Init(path, key))
-				{
-					var raw = db._header.GetRawDebug();
-					AssertExt.Equal(expected_Salt, DBHeader.GetSaltDebug(raw)); //salt
-					Assert.Equal(expected_Login, db._header.Login);
-				}
+			}
+			catch (Exception ex)
+			{
+				throw new Exception($"Seed: {Seed}", ex);
 			}
 			finally
 			{

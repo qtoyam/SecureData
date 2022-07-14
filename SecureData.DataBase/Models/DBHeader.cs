@@ -1,12 +1,14 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using SecureData.DataBase.Models.Abstract;
+
 namespace SecureData.DataBase.Models
 {
 	//TODO: version != currentVersion => do something
-	public class DBHeader
+	internal class DBHeader : IDBData
 	{
-		public class Layout : LayoutBase
+		public static class Layout
 		{
 			public const int HashSize = 32;
 			public const int HashOffset = 0;
@@ -19,67 +21,76 @@ namespace SecureData.DataBase.Models
 
 			public const int LoginSize = 256;
 			public const int LoginOffset = SaltSize + SaltOffset;
-
-			public const int Size = LoginOffset + LoginSize;
-
-			public const int RNGOffset = Size;
-			public const int RNGSize = 11968;
-
-			public const int HashingStart = HashSize;
-			public const int EncryptionStart = RNGOffset; //encrypt from RNG
-
-			public new const int DBSize = Size + RNGSize;
 		}
+		public int Size => Layout.LoginOffset + Layout.LoginSize;
+		public int RNGOffset => Size;
+		public int RNGSize => 11968;
+		public int HashStart => Layout.HashSize;
+		public int SelfEncryptStart => RNGOffset;
 
-		private Raw _raw = new();
+		public Memory<byte> RawMemory { get; }
 
-		public uint Version => _raw.Version;
+		private uint _version;
+		private string _login = string.Empty;
 
-		//TODO: cache login somehow
-		public unsafe string Login
+		public Memory<byte> Hash { get; }
+		public uint Version
 		{
-			get
+
+			get => _version;
+			set
 			{
-				fixed(byte* rawLogin_ptr = _raw.Login)
-				{
-					return StringHelper.GetStringFromNullTerminatedBytes(rawLogin_ptr);					
-				}
+				_version = value;
+				Changes++;
 			}
 		}
-
-		internal void Init(Span<byte> s_dbHeader, uint version, ReadOnlySpan<byte> salt, string login)
+		public Memory<byte> Salt { get; }
+		public string Login
 		{
-			_raw.Version = version;
-			salt.CopyTo(GetSalt(s_dbHeader));
-			StringHelper.WriteWithRNG(GetLogin(s_dbHeader), login);
+			get => _login;
+			set
+			{
+				_login = value;
+				Changes++;
+			}
+		}
+		public int Changes { get; private set; }
+
+
+		public ReadOnlySpan<byte> GetRawHashable() => RawMemory.Slice(HashStart).Span;
+
+		public unsafe void Update()
+		{
+			fixed (byte* rawMemory_ptr = RawMemory.Span)
+			{
+				_version = BinaryHelper.ReadUInt32(rawMemory_ptr, Layout.VersionOffset);
+				_login = BinaryHelper.ReadString(rawMemory_ptr, Layout.LoginOffset);
+			}
+			Changes = 0;
 		}
 
-
-		internal Span<byte> GetRaw() => MemoryHelper.StructToSpan(in _raw);
-		internal static Span<byte> GetSalt(Span<byte> raw) => raw.Slice(Layout.SaltOffset, Layout.SaltSize);
-		internal static Span<byte> GetHash(Span<byte> raw) => raw.Slice(Layout.HashOffset, Layout.HashSize);
-		internal static Span<byte> GetLogin(Span<byte> raw) => raw.Slice(Layout.LoginOffset, Layout.LoginSize);
-
-
-
-		[StructLayout(LayoutKind.Explicit, Pack = 1)]
-		internal unsafe struct Raw
+		public void Flush()
 		{
-			[FieldOffset(Layout.HashOffset)]
-			public fixed byte Hash[Layout.HashSize];
-			[FieldOffset(Layout.VersionOffset)]
-			public UInt32 Version;
-			[FieldOffset(Layout.SaltOffset)]
-			public fixed byte Salt[Layout.SaltSize];
-			[FieldOffset(Layout.LoginOffset)]
-			public fixed byte Login[Layout.LoginSize];
+			if (Changes == 0)
+			{
+				return;
+			}
+			unsafe
+			{
+				fixed (byte* rawMemory_ptr = RawMemory.Span)
+				{
+					BinaryHelper.Write(rawMemory_ptr, Layout.VersionOffset, _version);
+					BinaryHelper.Write(rawMemory_ptr, Layout.LoginOffset, _login, Layout.LoginSize);
+				}
+			}
+			Changes = 0;
 		}
 
-#if DEBUG
-		public Span<byte> GetRawDebug() => GetRaw();
-		public static Span<byte> GetSaltDebug(Span<byte> raw) => GetSalt(raw);
-		public static Span<byte> GetHashDebug(Span<byte> raw) => GetHash(raw);
-		//public static Span<byte> GetLoginDebug(Span<byte> raw) => GetLogin(raw);
-#endif
+		public DBHeader()
+		{
+			RawMemory = new byte[Size];
+			Hash = RawMemory.Slice(Layout.HashOffset, Layout.HashSize);
+			Salt = RawMemory.Slice(Layout.SaltOffset, Layout.SaltSize);
+		}
 	}
 }

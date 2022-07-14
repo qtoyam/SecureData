@@ -1,14 +1,9 @@
-﻿using System;
-using System.Buffers.Binary;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Text;
 
 using SecureData.Cryptography.Hash;
+using SecureData.Cryptography.Streams;
 using SecureData.Cryptography.SymmetricEncryption;
-using SecureData.DataBase.Models;
+using SecureData.DataBase.Helpers;
 
 namespace SecureData.Tests.DataBase.DB
 {
@@ -20,39 +15,36 @@ namespace SecureData.Tests.DataBase.DB
 			string path = $"{nameof(Init_NoData)}TMP0.tmp";
 			try
 			{
-				byte[] fileData = new byte[DBHeader.Layout.DBSize];
-				byte[] key = new byte[Aes256Ctr.KeySize];
-				byte[] expected_Salt = new byte[Aes256Ctr.IVSize];
-				byte[] expected_Hash;
-				Random r = new(42);
-				r.NextBytes(fileData);
-				r.NextBytes(key);
-				r.NextBytes(expected_Salt);
-				uint expected_Version = BinaryPrimitives.ReadUInt32LittleEndian(fileData.AsSpan(DBHeader.Layout.VersionOffset, DBHeader.Layout.VersionSize));
-				//fill with known iv to compare results
-				expected_Salt.AsSpan().CopyTo(fileData.AsSpan(DBHeader.Layout.SaltOffset, DBHeader.Layout.SaltSize));
-				//fill with valid string cauze encoding is sensetive
-				string expected_Login = "MY LOGIN йй123*%№@#!%S\0";
-				Encoding.UTF8.GetBytes(expected_Login, fileData.AsSpan(DBHeader.Layout.LoginOffset, DBHeader.Layout.LoginSize));
-				expected_Login = expected_Login.Remove(expected_Login.Length - 1);
-				expected_Hash = SHA256.ComputeHash(fileData.AsSpan(DBHeader.Layout.HashingStart));
-				//fill with valid hash
-				expected_Hash.AsSpan().CopyTo(fileData.AsSpan(DBHeader.Layout.HashOffset, DBHeader.Layout.HashSize));
-				using (Aes256Ctr aes = new(key, expected_Salt))
+				Span<byte> key = new byte[Aes.KeySize];
+				Span<byte> data = new byte[Sizes.DBSize];
+				Span<byte> salt = data.Slice(Sizes.SaltOffset, Sizes.SaltSize);
+				Span<byte> hash = data.Slice(Sizes.HashOffset, Sizes.HashSize);
+				Span<byte> rng = data.Slice(Sizes.RNGOffset, Sizes.RNGSize);
+				string login = "MY LOGINn12377842189&^#&^@!89sa;as\"" + '\0'; //null terminate cauze we emulate creation of file
+				uint version = 1;
+				RNG(key, data);
+				BinaryHelper.Write(data.Slice(Sizes.VersionOffset), version);
+				BinaryHelper.Write(data.Slice(Sizes.LoginOffset, Sizes.LoginSize), Encoding.UTF8.GetBytes(login));
+				SHA256.ComputeHash(data.Slice(Sizes.HashStart), hash);
+				using (var bcs = new BlockCryptoStream(path,
+					new FileStreamOptions() { Access = FileAccess.Write, Mode = FileMode.CreateNew }, key, salt))
 				{
-					aes.Transform(fileData.AsSpan(DBHeader.Layout.RNGOffset),
-						   DBHeader.Layout.RNGOffset / Aes256Ctr.BlockSize);
+					bcs.WriteThroughEncryption(data.Slice(0, Sizes.SelfEncryptStart));
+					bcs.Write(data.Slice(Sizes.SelfEncryptStart));
 				}
-				File.WriteAllBytes(path, fileData);
-
-				using (var db = SecureData.DataBase.DB.Init(path, key))
+				using (var db = new SecureData.DataBase.DB(path, false))
 				{
-					var raw = db._header.GetRawDebug();
-					AssertExt.Equal(expected_Hash, DBHeader.GetHashDebug(raw)); //hash
-					Assert.Equal(expected_Version, db._header.Version); //version
-					AssertExt.Equal(expected_Salt, DBHeader.GetSaltDebug(raw)); //salt
-					Assert.Equal(expected_Login, db._header.Login); //login
+					bool res = db.TryInit(key);
+					Assert.True(res);
+					Assert.Equal(login[..^1], db.Login);
+					Assert.Equal(version, db.Version);
+					AssertExt.Equal(salt, db.Salt.Span);
+					AssertExt.Equal(hash, db.Hash.Span);
 				}
+			}
+			catch (Exception ex)
+			{
+				throw new Exception($"Seed: {Seed}", ex);
 			}
 			finally
 			{
@@ -64,17 +56,38 @@ namespace SecureData.Tests.DataBase.DB
 		}
 
 		[Fact]
-		public void Init_WrongHash()
+		public void Init_WrongKey()
 		{
-			string path = $"{nameof(Init_WrongHash)}.tmp";
+			string path = $"{nameof(Init_WrongKey)}TMP0.tmp";
 			try
 			{
-				byte[] fileData = new byte[DBHeader.Layout.DBSize];
-				File.WriteAllBytes(path, fileData);
-				Assert.Throws<SecureData.DataBase.Exceptions.DataBaseWrongHashException>(
-					  () =>
-					  SecureData.DataBase.DB.Init(path, new byte[Aes256Ctr.KeySize]).Dispose()
-					  );
+				Span<byte> key = new byte[Aes.KeySize];
+				Span<byte> data = new byte[Sizes.DBSize];
+				Span<byte> salt = data.Slice(Sizes.SaltOffset, Sizes.SaltSize);
+				Span<byte> hash = data.Slice(Sizes.HashOffset, Sizes.HashSize);
+				Span<byte> rng = data.Slice(Sizes.RNGOffset, Sizes.RNGSize);
+				string login = "MY LOGINn12377842189&^#&^@!89sa;as\"" + '\0';
+				uint version = 1;
+				RNG(key, data);
+				BinaryHelper.Write(data.Slice(Sizes.VersionOffset), version);
+				BinaryHelper.Write(data.Slice(Sizes.LoginOffset, Sizes.LoginSize), Encoding.UTF8.GetBytes(login));
+				SHA256.ComputeHash(data.Slice(Sizes.HashStart), hash);
+				using (var bcs = new BlockCryptoStream(path,
+					new FileStreamOptions() { Access = FileAccess.Write, Mode = FileMode.CreateNew }, key, salt))
+				{
+					bcs.WriteThroughEncryption(data.Slice(0, Sizes.SelfEncryptStart));
+					bcs.Write(data.Slice(Sizes.SelfEncryptStart));
+				}
+				using (var db = new SecureData.DataBase.DB(path, false))
+				{
+					key[1]++; //modify key
+					bool res = db.TryInit(key);
+					Assert.False(res);
+				}
+			}
+			catch (Exception ex)
+			{
+				throw new Exception($"Seed: {Seed}", ex);
 			}
 			finally
 			{
