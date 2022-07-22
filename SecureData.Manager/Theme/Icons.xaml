@@ -1,0 +1,30 @@
+﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+	<DrawingImage x:Key="diamondDrawingImage">
+		<DrawingImage.Drawing>
+			<DrawingGroup ClipGeometry="M0,0 V512 H512 V0 H0 Z">
+				<GeometryDrawing Brush="#FF2D4452">
+					<GeometryDrawing.Geometry>
+						<EllipseGeometry RadiusX="256"
+										 RadiusY="256"
+										 Center="256,256" />
+					</GeometryDrawing.Geometry>
+				</GeometryDrawing>
+				<GeometryDrawing Brush="#FF243947"
+								 Geometry="F1 M512,512z M0,0z M488.36,363.436L416,184 336,132 176,132 96,184 227.676,510.408C236.984,511.428 246.424,512 256,512 359,512 447.744,451.132 488.36,363.436z" />
+				<GeometryDrawing Brush="#FF91D8F0"
+								 Geometry="F1 M512,512z M0,0z M336,132L336,132 176,132 96,184 256,392 416,184z" />
+				<GeometryDrawing Brush="#FF86C8DE"
+								 Geometry="F1 M512,512z M0,0z M188,184L188,184 96,184 256,392z" />
+				<GeometryDrawing Brush="#FFB4E1F0"
+								 Geometry="F1 M512,512z M0,0z M176,132L176,132 96,184 188,184z" />
+				<GeometryDrawing Brush="#FF6CA1B3"
+								 Geometry="F1 M512,512z M0,0z M324,184L324,184 256,392 416,184z" />
+				<GeometryDrawing Brush="#FF7BB8CC"
+								 Geometry="F1 M512,512z M0,0z M336,132L336,132 324,184 416,184z" />
+				<GeometryDrawing Brush="#FFA8DEF0"
+								 Geometry="F1 M512,512z M0,0z M176,132L176,132 188,184 324,184 336,132z" />
+			</DrawingGroup>
+		</DrawingImage.Drawing>
+	</DrawingImage>
+</ResourceDictionary>

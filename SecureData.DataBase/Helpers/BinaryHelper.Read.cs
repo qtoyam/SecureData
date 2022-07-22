@@ -6,29 +6,22 @@ namespace SecureData.DataBase.Helpers
 	//READ
 	public static partial class BinaryHelper
 	{
-		public static unsafe UInt32 ReadUInt32(ReadOnlySpan<byte> bytes)
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static UInt32 ReadUInt32(ReadOnlySpan<byte> source) => MemoryMarshal.Read<uint>(source);
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static DateTime ReadDateTime(ReadOnlySpan<byte> source) => MemoryMarshal.Read<DateTime>(source).ToLocalTime();
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static bool ReadBool(ReadOnlySpan<byte> source) => source[0] != 0;
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static string ReadString(ReadOnlySpan<byte> source)
 		{
-			fixed(byte* bytes_ptr = bytes.Slice(0, sizeof(UInt32)))
+			int l = source.IndexOf((byte)0);
+			if (l == -1)
 			{
-				return ReadUInt32(bytes_ptr, 0);
+				l = source.Length;
 			}
+			return Encoding.GetString(source.Slice(0, l));
 		}
 
-		public static unsafe UInt32 ReadUInt32(byte* ptr, int byteOffset)
-		{
-			return *(UInt32*)(ptr + byteOffset);
-		}
-		public static unsafe DateTime ReadDateTime(byte* ptr, int byteOffset)
-		{
-			return DateTime.FromBinary(*(long*)(ptr + byteOffset));
-		}
-		public static unsafe bool ReadBool(byte* ptr, int byteOffset)
-		{
-			return ptr[byteOffset] != 0;
-		}
-		public static unsafe string ReadString(byte* ptr, int byteOffset)
-		{
-			return Encoding.GetString(MemoryMarshal.CreateReadOnlySpanFromNullTerminated(ptr + byteOffset));
-		}
 	}
 }

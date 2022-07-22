@@ -1,29 +1,24 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
 using SecureData.Cryptography.Hash;
 using SecureData.Cryptography.Streams;
 using SecureData.Cryptography.SymmetricEncryption;
 using SecureData.DataBase.Exceptions;
+using SecureData.DataBase.Helpers;
 using SecureData.DataBase.Models;
 using SecureData.DataBase.Models.Abstract;
+
+[assembly: InternalsVisibleTo("SecureData.Tests.DataBase")]
 
 namespace SecureData.DataBase
 {
 	//note: CNP = can be paralleled
 	public sealed class DB : IDisposable, IAsyncDisposable
 	{
-		//TODO: default value
-
-		private static uint _id = Consts.ReservedId;
-		internal static uint GetId()
-		{
-			return Interlocked.Add(ref _id, 1);
-		}
-
 		internal static class Consts
 		{
 			public const uint Version = 1;
-			public const uint ReservedId = 0;
 			//should be greater than DBHeader real size and max IData size
 			public const int InitBufferSize = 128 * 1024;
 		}
@@ -32,16 +27,17 @@ namespace SecureData.DataBase
 		private readonly DBHeader _dbHeader;
 		private readonly Aes _aes; //not autodisposable
 		private readonly BlockCryptoStream _bcs;
-		private readonly SHA256 _sha256;
-		private readonly Dictionary<uint, Data> _data;
+		private readonly SHA256 _sha; //TODO: sha thread-safe
+		private readonly Dictionary<uint, Data> _allData;
+		private readonly List<Data> _root;
+
+		public IReadOnlyList<Data> Root => _root;
 
 		public string Login => _dbHeader.Login;
 		public uint Version => _dbHeader.Version;
-		public ReadOnlyMemory<byte> Hash => _dbHeader.Hash;
-		public ReadOnlyMemory<byte> Salt => _dbHeader.Salt;
+		public ReadOnlySpan<byte> Hash => _dbHeader.Hash.Span;
+		public ReadOnlySpan<byte> Salt => _dbHeader.Salt.Span;
 
-		//private readonly ReadOnlyDictionary<uint, IData> _items;
-		//public ReadOnlyDictionary<uint, IData> Items => _items;
 
 		public DB(string path, bool create)
 		{
@@ -57,8 +53,9 @@ namespace SecureData.DataBase
 				Mode = create ? FileMode.CreateNew : FileMode.Open
 			};
 			_bcs = new BlockCryptoStream(path, fso, _aes, false);
-			_sha256 = new SHA256();
-			_data = new Dictionary<uint, Data>();
+			_sha = new SHA256();
+			_allData = new Dictionary<uint, Data>();
+			_root = new List<Data>();
 		}
 
 		//TODO: do not init again, check it
@@ -67,51 +64,52 @@ namespace SecureData.DataBase
 			try
 			{
 				_bcs.Position = 0;
-				_sha256.Initialize();
+				_sha.Initialize();
 				Span<byte> s_buffer = _buffer;
 
 				//header
-				_bcs.ReadThroughEncryption(_dbHeader.RawMemory.Span); //TODO: do not read again if new key, iv supplied
-				_dbHeader.Update();
-				_sha256.Transform(_dbHeader.GetRawHashable());
-				_aes.SetKeyIV(key, _dbHeader.Salt.Span);
-				Span<byte> s_rng = s_buffer.Slice(0, _dbHeader.RNGSize);
-				_bcs.Read(s_rng);
-				_sha256.Transform(s_rng);
+				if (!_dbHeader.IsInited)
+				{
+					_bcs.ReadThroughEncryption(_dbHeader.RawMemory.Span); //TODO: do not read again if new key, iv supplied
+					_dbHeader.Update();
+					_sha.Transform(_dbHeader.GetRawHashable());
+					_aes.SetIV(_dbHeader.Salt.Span);
+				}
+				_aes.SetKey(key);
+				ComputeRNGHash(_sha);
 
 
 				//data
 				int bytesRead = 0; //currently read bytes
 				int bytesProcessed = 0; //read and hashed bytes
+				ReadOnlySpan<byte> s_working = ReadOnlySpan<byte>.Empty;
 				while ((bytesRead = _bcs.Read(s_buffer.Slice(bytesProcessed))) > 0)
 				{
-					_sha256.Transform(s_buffer.Slice(bytesProcessed, bytesRead - bytesProcessed)); //TODO: CBP
-					int readTo = _bcs.EOF() ? 1 : LayoutBase.MaxDataSize; //1 to loop while >= 1 instead of >= 0 (can be runned when == 0)
-					ReadOnlySpan<byte> s_working = s_buffer.Slice(0, bytesRead);
-					while (s_working.Length >= readTo)
+					s_working = s_buffer.Slice(0, bytesRead);
+					_sha.Transform(s_buffer.Slice(bytesProcessed, bytesRead - bytesProcessed)); //TODO: CBP
+					while (s_working.Length >= Data.MinSizeToFindDataType)
 					{
-						Data d = Data.Create(s_working);
-						if (d.Id > _id)
+						if (Data.TryCreateFromBuffer(s_working, out Data? data, out int readBytes))
 						{
-							_id = d.Id;
+							_allData.Add(data.Id, data);
 						}
-						if (!d.IsDeleted())
+						else if (readBytes == 0) //we dont get Data cauze not enough data in working buffer
 						{
-							_data.Add(d.Id, d);
+							bytesProcessed = s_working.Length; //dont read/hash this region again
+							s_working.CopyTo(s_buffer); //copy for next iteration
+							break;
 						}
-						s_working = s_working.Slice(d.Size);
-					}
-					if (s_working.Length != 0)
-					{
-						// will throw in Data.Create if readTo == 0
-						bytesProcessed = s_working.Length; //dont read/hash this region again
-						s_working.CopyTo(s_buffer); //copy for next iteration
+						s_working = s_working.Slice(readBytes);
 					}
 				}
-				Data.OrganizeHierarchy(_data); //TODO: CBP
+				if(s_working.Length != 0)
+				{
+					throw DataBaseCorruptedException.WrongDataItemsSize();
+				}
+				Data.OrganizeHierarchy(_allData, _root);
 
 				Span<byte> s_actualHash = s_buffer.Slice(0, SHA256.HashSize);
-				_sha256.Finalize(s_actualHash);
+				_sha.Finalize(s_actualHash);
 				if (!MemoryHelper.Compare(s_actualHash, _dbHeader.Hash.Span))
 				{
 					return false;
@@ -128,7 +126,7 @@ namespace SecureData.DataBase
 		public void Create(ReadOnlySpan<byte> key, ReadOnlySpan<byte> salt, string login)
 		{
 			_bcs.Position = 0;
-			_sha256.Initialize();
+			_sha.Initialize();
 			Span<byte> s_buffer = _buffer;
 
 			_aes.SetKeyIV(key, salt);
@@ -139,45 +137,120 @@ namespace SecureData.DataBase
 			BinaryHelper.Write(_dbHeader.Salt.Span, salt);
 			_dbHeader.Flush();
 
-			_sha256.Transform(_dbHeader.GetRawHashable()); //hash Header
+			_sha.Transform(_dbHeader.GetRawHashable()); //hash Header
 			_bcs.WriteThroughEncryption(_dbHeader.RawMemory.Span);
 			//rng
 			{
 				Span<byte> s_headerRNG = s_buffer.Slice(0, _dbHeader.RNGSize);
 				MemoryHelper.RNG(s_headerRNG);
-				_sha256.Transform(s_headerRNG); //hash RNG
+				_sha.Transform(s_headerRNG); //hash RNG
 				_bcs.WriteFast(s_headerRNG);
 			}
-			_sha256.Finalize(_dbHeader.Hash.Span); //finalize hash directly to Header
-			UpdateHash();
+			_sha.Finalize(_dbHeader.Hash.Span); //finalize hash directly to Header
+			WriteCurrentHash();
 			//note: buffer contains encrypted RNG, so no need to ZeroOut it.
 		}
 
-		//private void UpdateHashHeader()
-		//{
-		//	_sha256.Transform(_dbHeader.GetRawHashable());
-		//	_bcs.Position = _dbHeader.RNGOffset;
-		//	Span<byte> s_rng = _buffer.AsSpan(0, _dbHeader.RNGSize);
-		//	_bcs.Read(s_rng);
-		//	_sha256.Transform(s_rng);
-		//}
-		/// <summary>
-		/// Consumes first <see cref="SHA256.HashSize"/> bytes of <see cref="_buffer"/>.
-		/// </summary>
-		private void UpdateHash()
+		public void AddData(Data data)
+		{
+			try
+			{
+				_sha.Initialize();
+				//hash header
+				_sha.Transform(_dbHeader.GetRawHashable());
+				ComputeRNGHash(_sha);
+				ComputeDataHash(_sha);
+				//check hash
+				{
+					Span<byte> s_actualHash = _buffer.AsSpan(0, SHA256.HashSize);
+					using (SHA256 shaTmp = _sha.Clone())
+					{
+						shaTmp.Finalize(s_actualHash);
+					}
+					if (!MemoryHelper.Compare(_dbHeader.Hash.Span, s_actualHash))
+					{
+						throw DataBaseCorruptedException.UnexpectedHash();
+					}
+				}
+				data.InitNew();
+				WriteNewData(data, _sha);
+				_allData.Add(data.Id, data);
+				if (data.Parent is null)
+				{
+					_root.Add(data);
+				}
+				_sha.Finalize(_dbHeader.Hash.Span);
+				WriteCurrentHash();
+			}
+			finally
+			{
+				MemoryHelper.ZeroOut(_buffer);
+			}
+
+		}
+
+		private void WriteCurrentHash()
 		{
 			_bcs.Position = DBHeader.Layout.HashOffset;
 			_bcs.WriteThroughEncryption(_dbHeader.Hash.Span);
 		}
+		/// <summary>
+		/// Reads RNG from <see cref="_bcs"/> and computes hash.
+		/// Consumes first RNGSize's bytes from <see cref="_buffer"/>.
+		/// MUST be zero-out.
+		/// </summary>
+		private void ComputeRNGHash(SHA256 sha)
+		{
+			_bcs.Position = _dbHeader.RNGOffset;
+			Span<byte> s_rng = _buffer.AsSpan(0, _dbHeader.RNGSize);
+			_bcs.Read(s_rng);
+			sha.Transform(s_rng);
+		}
+		/// <summary>
+		/// Reads all data from <see cref="_bcs"/> and computes hash.
+		/// Can consume full <see cref="_buffer"/>.
+		/// MUST be zero-out.
+		/// </summary>
+		/// <param name="sha"></param>
+		private void ComputeDataHash(SHA256 sha)
+		{
+			_bcs.Position = _dbHeader.DBSize;
+			Span<byte> s_buffer = _buffer;
+			int bytesRead;
+			while ((bytesRead = _bcs.Read(s_buffer)) > 0)
+			{
+				sha.Transform(s_buffer.Slice(0, bytesRead));
+			}
+		}
+
+		/// <summary>
+		/// Consumes up to <see cref="Data.MaxSize"/> bytes of <see cref="_buffer"/>.
+		/// </summary>
+		private void WriteNewData(Data data, SHA256 sha)
+		{
+			_bcs.Seek(0, SeekOrigin.End);
+			Span<byte> s_dataLocked = _buffer.AsSpan(0, data.Size);
+			data.LockMeTemp(s_dataLocked);
+			sha.Transform(s_dataLocked);
+			_bcs.WriteFast(s_dataLocked);
+		}
 
 		public void Dispose()
 		{
+			foreach(var data in _allData.Values)
+			{
+				data.Clear();
+			}
 			_aes.Dispose();
 			_bcs.Dispose();
 		}
 
 		public ValueTask DisposeAsync()
 		{
+			foreach (var data in _allData.Values)
+			{
+				data.Clear();
+			}
 			_aes.Dispose();
 			return _bcs.DisposeAsync();
 		}

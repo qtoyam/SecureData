@@ -1,54 +1,32 @@
-﻿namespace SecureData.DataBase.Helpers
+﻿using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
+namespace SecureData.DataBase.Helpers
 {
 	public static partial class BinaryHelper
 	{
-		public static unsafe void Write(Span<byte> dest, uint value)
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void Write(Span<byte> destination, bool value) => destination[0] = (byte)(value ? 1 : 0);
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void Write(Span<byte> destination, uint value) => MemoryMarshal.Write(destination, ref value);
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void Write(Span<byte> destination, DateTime value)
 		{
-			fixed (byte* ptr = dest.Slice(0, sizeof(uint)))
+			DateTime utc = value.ToUniversalTime();
+			MemoryMarshal.Write(destination, ref utc);
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void WriteWRNG(Span<byte> destination, ReadOnlySpan<char> value)
+		{
+			int bytesWritten = Encoding.GetBytes(value, destination);
+			if(bytesWritten < destination.Length)
 			{
-				Write(ptr, 0, value);
+				destination[bytesWritten] = 0; //null terminate
+				MemoryHelper.RNG(destination.Slice(bytesWritten + 1)); //fill extra with RNG
 			}
 		}
-
-		public static unsafe void Write(Span<byte> dest, long value)
-		{
-			fixed (byte* ptr = dest.Slice(0, sizeof(long)))
-			{
-				Write(ptr, 0, value);
-			}
-		}
-
-		public static unsafe void Write(Span<byte> dest, bool value)
-		{
-			dest[0] = (byte)(value ? 1 : 0);
-		}
-
-		public static void Write(Span<byte> dest, ReadOnlySpan<byte> source)
-		{
-			source.CopyTo(dest);
-		}
-
-		public static unsafe void Write(byte* ptr, int offset, uint value)
-		{
-			*(uint*)(ptr + offset) = value;
-		}
-		public static unsafe void Write(byte* ptr, int offset, long value)
-		{
-			*(long*)(ptr + offset) = value;
-		}
-		public static unsafe void Write(byte* ptr, int offset, bool value)
-		{
-			*(ptr + offset) = (byte)(value ? 1 : 0);
-		}
-		public static unsafe void Write(byte* ptr, int offset, string value, int fixedSize)
-		{
-			Span<byte> s_ptr = new Span<byte>(ptr + offset, fixedSize);
-			int bytesWritten = Encoding.GetBytes(value, s_ptr);
-			if (bytesWritten < fixedSize)
-			{
-				s_ptr[bytesWritten] = 0; //null terminate
-				MemoryHelper.RNG(s_ptr.Slice(bytesWritten + 1));
-			}
-		}
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void Write(Span<byte> dest, ReadOnlySpan<byte> source) => source.CopyTo(dest);
 	}
 }

@@ -16,11 +16,13 @@ namespace SecureData.Cryptography.SymmetricEncryption
 
 		public uint Counter { get; set; }
 
-		public Aes()
+		private Aes(AesSafeHandle handle, uint counter)
 		{
-			Native.AES_CreateHandle(out _handle);
-			Counter = 0;
+			_handle = handle;
+			Counter = counter;
 		}
+
+		public Aes() : this(Native.AES_CreateHandle(), 0U) { }
 		public Aes(ReadOnlySpan<byte> key, ReadOnlySpan<byte> iv) : this()
 		{
 			SetKeyIV(key, iv);
@@ -124,10 +126,35 @@ namespace SecureData.Cryptography.SymmetricEncryption
 			TransformBlock(input, input);
 		}
 
+		/// <summary>
+		/// Add <paramref name="value"/> to first 64 bits of IV.
+		/// </summary>
+		/// <param name="value"></param>
+		public void MoveNextIV(ulong value)
+		{
+			Native.AES_AddIV0(_handle, value);
+		}
+
+		/// <summary>
+		/// Subtract <paramref name="value"/> from first 64 bits of IV.
+		/// </summary>
+		/// <param name="value"></param>
+		public void MovePrevIV(ulong value)
+		{
+			Native.AES_SubtractIV0(_handle, value);
+		}
+
 		public void Dispose()
 		{
 			_handle.Dispose();
 			GC.SuppressFinalize(this);
+		}
+
+		public Aes Clone()
+		{
+			AesSafeHandle newHandle = Native.AES_CreateHandle();
+			Native.AES_Clone(_handle, newHandle);
+			return new Aes(newHandle, Counter);
 		}
 
 		#region Helpers
@@ -153,11 +180,17 @@ namespace SecureData.Cryptography.SymmetricEncryption
 		private static class Native
 		{
 			[DllImport(DllImportManager.DllName)]
-			public static extern unsafe void AES_CreateHandle(out AesSafeHandle handle);
+			private static extern void AES_CreateHandle(out AesSafeHandle handle);
 			[DllImport(DllImportManager.DllName)]
 			public static extern unsafe void AES_SetIV(AesSafeHandle handle, void* iv);
 			[DllImport(DllImportManager.DllName)]
-			public static extern unsafe void AES_DestroyHandle(IntPtr handle);
+			public static extern void AES_DestroyHandle(IntPtr handle);
+			[DllImport(DllImportManager.DllName)]
+			public static extern void AES_Clone(AesSafeHandle source, AesSafeHandle destination);
+			[DllImport(DllImportManager.DllName)]
+			public static extern void AES_AddIV0(AesSafeHandle handle, ulong value);
+			[DllImport(DllImportManager.DllName)]
+			public static extern void AES_SubtractIV0(AesSafeHandle handle, ulong value);
 
 			#region Default
 			[DllImport(DllImportManager.DllName)]
@@ -216,6 +249,11 @@ namespace SecureData.Cryptography.SymmetricEncryption
 				{
 					AESNI_EncryptBlock(handle, input, output, initialCounter);
 				}
+			}
+			public static AesSafeHandle AES_CreateHandle()
+			{
+				AES_CreateHandle(out AesSafeHandle handle);
+				return handle;
 			}
 		}
 	}

@@ -1,12 +1,13 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using SecureData.DataBase.Helpers;
 using SecureData.DataBase.Models.Abstract;
 
 namespace SecureData.DataBase.Models
 {
 	//TODO: version != currentVersion => do something
-	internal class DBHeader : IDBData
+	internal class DBHeader
 	{
 		public static class Layout
 		{
@@ -23,14 +24,17 @@ namespace SecureData.DataBase.Models
 			public const int LoginOffset = SaltSize + SaltOffset;
 		}
 		public int Size => Layout.LoginOffset + Layout.LoginSize;
+		public int DBSize => Size + RNGSize;
 		public int RNGOffset => Size;
 		public int RNGSize => 11968;
 		public int HashStart => Layout.HashSize;
 		public int SelfEncryptStart => RNGOffset;
 
+		public bool IsInited => _version != 0;
+
 		public Memory<byte> RawMemory { get; }
 
-		private uint _version;
+		private uint _version = 0;
 		private string _login = string.Empty;
 
 		public Memory<byte> Hash { get; }
@@ -59,13 +63,11 @@ namespace SecureData.DataBase.Models
 
 		public ReadOnlySpan<byte> GetRawHashable() => RawMemory.Slice(HashStart).Span;
 
-		public unsafe void Update()
+		public void Update()
 		{
-			fixed (byte* rawMemory_ptr = RawMemory.Span)
-			{
-				_version = BinaryHelper.ReadUInt32(rawMemory_ptr, Layout.VersionOffset);
-				_login = BinaryHelper.ReadString(rawMemory_ptr, Layout.LoginOffset);
-			}
+			Span<byte> raw = RawMemory.Span;
+			_version = BinaryHelper.ReadUInt32(raw.Slice(Layout.VersionOffset, Layout.VersionSize));
+			_login = BinaryHelper.ReadString(raw.Slice(Layout.LoginOffset, Layout.LoginSize));
 			Changes = 0;
 		}
 
@@ -75,14 +77,9 @@ namespace SecureData.DataBase.Models
 			{
 				return;
 			}
-			unsafe
-			{
-				fixed (byte* rawMemory_ptr = RawMemory.Span)
-				{
-					BinaryHelper.Write(rawMemory_ptr, Layout.VersionOffset, _version);
-					BinaryHelper.Write(rawMemory_ptr, Layout.LoginOffset, _login, Layout.LoginSize);
-				}
-			}
+			Span<byte> raw = RawMemory.Span;
+			BinaryHelper.Write(raw.Slice(Layout.VersionOffset, Layout.VersionSize), _version);
+			BinaryHelper.WriteWRNG(raw.Slice(Layout.LoginOffset, Layout.LoginSize), _login);
 			Changes = 0;
 		}
 

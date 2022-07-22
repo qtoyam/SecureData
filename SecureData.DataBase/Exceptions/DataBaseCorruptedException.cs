@@ -12,6 +12,8 @@
 
 		public static DataBaseCorruptedException WrongDBSize() => new("Wrong database size.");
 
+		public static DataBaseCorruptedException WrongDataItemsSize() => new("Data items corrupted, not enough size bytes.");
+
 		public static DataBaseCorruptedException UnexpectedHash() => new("Unexpected wrong hash value.");
 	}
 }

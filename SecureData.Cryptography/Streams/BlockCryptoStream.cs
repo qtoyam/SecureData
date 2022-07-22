@@ -18,10 +18,6 @@ namespace SecureData.Cryptography.Streams
 		private readonly bool _autoDisposeAes;
 		private readonly Aes _aes;
 
-		//TODO: remove this, cauze AesCTR have its own
-		//private uint CTR { get; set; }
-		//private void UpdateCTR() => CTR = (uint)(Position >> Aes.BlockSizeShift);
-
 		private void UpdCTR() => _aes.Counter = (uint)(Position >> Aes.BlockSizeShift);
 
 		public BlockCryptoStream(Stream baseStream, Aes aes, bool autoDisposeAes, bool closeOnDispose = false)
@@ -104,7 +100,7 @@ namespace SecureData.Cryptography.Streams
 		public override async Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
 		{
 			EnsureBuffer((ReadOnlySpan<byte>)buffer);
-			var res = await _baseStream.ReadAsync(buffer, offset, count, cancellationToken).ConfigureAwait(false);
+			var res = await _baseStream.ReadAsync(buffer.AsMemory(offset, count), cancellationToken).ConfigureAwait(false);
 			_aes.Transform(buffer);
 			return res;
 		}

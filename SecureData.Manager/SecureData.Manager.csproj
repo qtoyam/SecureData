@@ -1,0 +1,39 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net6.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWPF>true</UseWPF>
+    <StartupObject>SecureData.Manager.App</StartupObject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+	<Page Include="App.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Models\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="6.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="6.0.1" />
+    <PackageReference Include="Microsoft.Toolkit.Mvvm" Version="7.1.2" />
+    <PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" Version="1.1.39" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="WPFCore.Behaviors">
+      <HintPath>..\..\dll_sources\WPFCore\WPFCore.Controls\bin\Release\net6.0-windows\WPFCore.Behaviors.dll</HintPath>
+    </Reference>
+    <Reference Include="WPFCore.Controls">
+      <HintPath>..\..\dll_sources\WPFCore\WPFCore.Controls\bin\Release\net6.0-windows\WPFCore.Controls.dll</HintPath>
+    </Reference>
+    <Reference Include="WPFCore.Converters">
+      <HintPath>..\..\dll_sources\WPFCore\WPFCore.Controls\bin\Release\net6.0-windows\WPFCore.Converters.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>

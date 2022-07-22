@@ -1,9 +1,4 @@
-﻿global using SecureData.DataBase.Helpers;
-
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-
-namespace SecureData.DataBase.Helpers
+﻿namespace SecureData.DataBase.Helpers
 {
 	public static class MemoryHelper
 	{
