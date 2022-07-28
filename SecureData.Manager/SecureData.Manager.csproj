@@ -25,6 +25,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\SecureData.DataBase\SecureData.DataBase.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Reference Include="WPFCore.Behaviors">
       <HintPath>..\..\dll_sources\WPFCore\WPFCore.Controls\bin\Release\net6.0-windows\WPFCore.Behaviors.dll</HintPath>
     </Reference>

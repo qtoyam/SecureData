@@ -5,6 +5,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
+using SecureData.DataBase;
+using SecureData.Manager.ViewModels;
 using SecureData.Manager.Views;
 
 namespace SecureData.Manager
@@ -20,13 +22,17 @@ namespace SecureData.Manager
 			using (IHost host = CreateHost())
 			{
 				host.Start();
-				App app = new App();
+				App app = new App()
+				{
+					ShutdownMode = ShutdownMode.OnLastWindowClose
+				};
 				app.InitializeComponent();
+				LoginWindow loginWindow = new();
+				loginWindow.ShowDialog();
 				app.MainWindow = host.Services.GetRequiredService<AppWindow>();
 				app.MainWindow.Visibility = Visibility.Visible;
 				app.Run();
 			}
-
 		}
 
 		static IHost CreateHost() =>
@@ -63,6 +69,7 @@ namespace SecureData.Manager
 			{
 				//services, hosted services, configs
 				services.AddSingleton<AppWindow>();
+				services.AddSingleton<AppWindowVM>();
 			})
 			.Build();
 	}

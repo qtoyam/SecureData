@@ -7,6 +7,8 @@ namespace SecureData.DataBase.Helpers
 	public static partial class BinaryHelper
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static Int64 ReadInt64(ReadOnlySpan<byte> source) => MemoryMarshal.Read<long>(source);
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static UInt32 ReadUInt32(ReadOnlySpan<byte> source) => MemoryMarshal.Read<uint>(source);
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static DateTime ReadDateTime(ReadOnlySpan<byte> source) => MemoryMarshal.Read<DateTime>(source).ToLocalTime();
@@ -22,6 +24,7 @@ namespace SecureData.DataBase.Helpers
 			}
 			return Encoding.GetString(source.Slice(0, l));
 		}
-
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void ReadBytes(ReadOnlySpan<byte> source, Span<byte> destination) => source.CopyTo(destination);
 	}
 }

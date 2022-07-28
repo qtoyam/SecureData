@@ -9,8 +9,8 @@ namespace SecureData.Tests.Cryptography.Aes
 		{
 			Span<byte> data_tmp = new byte[256];
 
-			Span<byte> key = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.KeySize];
-			Span<byte> iv = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.IVSize];
+			Span<byte> key = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.KeySize];
+			Span<byte> iv = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.IVSize];
 
 			uint counter_1, counter_2;
 			Span<byte> data_1 = new byte[1024 * 64];
@@ -18,7 +18,7 @@ namespace SecureData.Tests.Cryptography.Aes
 			RNG(data_1, key, iv, data_tmp);
 			data_1.CopyTo(data_2);
 
-			using (SecureData.Cryptography.SymmetricEncryption.Aes aes_1 = new(key, iv))
+			using (SecureData.Cryptography.SymmetricEncryption.AesCtr aes_1 = new(key, iv))
 			{
 				aes_1.Counter = 42U;
 				aes_1.Transform(data_tmp);
@@ -42,8 +42,8 @@ namespace SecureData.Tests.Cryptography.Aes
 			const ulong moveBy = ulong.MaxValue / 2;
 			Span<byte> exp_data = new byte[1024*64];
 			Span<byte> act_data = new byte[exp_data.Length];
-			Span<byte> key = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.KeySize];
-			Span<byte> iv = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.IVSize];
+			Span<byte> key = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.KeySize];
+			Span<byte> iv = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.IVSize];
 			RNG(key, iv, exp_data);
 			exp_data.CopyTo(act_data);
 			Span<byte> exp_iv = new byte[iv.Length];
@@ -52,12 +52,12 @@ namespace SecureData.Tests.Cryptography.Aes
 				Span<ulong> exp_iv64 = MemoryMarshal.Cast<byte, ulong>(exp_iv);
 				exp_iv64[0] += moveBy;
 			}
-			using(SecureData.Cryptography.SymmetricEncryption.Aes exp_aes = new(key, exp_iv))
+			using(SecureData.Cryptography.SymmetricEncryption.AesCtr exp_aes = new(key, exp_iv))
 			{
 				exp_aes.Transform(exp_data);
 			}
 
-			using (SecureData.Cryptography.SymmetricEncryption.Aes act_aes = new(key, iv))
+			using (SecureData.Cryptography.SymmetricEncryption.AesCtr act_aes = new(key, iv))
 			{
 				act_aes.MoveNextIV(moveBy);
 				act_aes.Transform(act_data);
@@ -72,8 +72,8 @@ namespace SecureData.Tests.Cryptography.Aes
 			const ulong moveBy = ulong.MaxValue / 2 + 204;
 			Span<byte> exp_data = new byte[1024 * 64];
 			Span<byte> act_data = new byte[exp_data.Length];
-			Span<byte> key = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.KeySize];
-			Span<byte> iv = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.IVSize];
+			Span<byte> key = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.KeySize];
+			Span<byte> iv = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.IVSize];
 			RNG(key, iv, exp_data);
 			exp_data.CopyTo(act_data);
 			Span<byte> exp_iv = new byte[iv.Length];
@@ -82,12 +82,12 @@ namespace SecureData.Tests.Cryptography.Aes
 				Span<ulong> exp_iv64 = MemoryMarshal.Cast<byte, ulong>(exp_iv);
 				exp_iv64[0] -= moveBy;
 			}
-			using (SecureData.Cryptography.SymmetricEncryption.Aes exp_aes = new(key, exp_iv))
+			using (SecureData.Cryptography.SymmetricEncryption.AesCtr exp_aes = new(key, exp_iv))
 			{
 				exp_aes.Transform(exp_data);
 			}
 
-			using (SecureData.Cryptography.SymmetricEncryption.Aes act_aes = new(key, iv))
+			using (SecureData.Cryptography.SymmetricEncryption.AesCtr act_aes = new(key, iv))
 			{
 				act_aes.MovePrevIV(moveBy);
 				act_aes.Transform(act_data);

@@ -52,8 +52,8 @@
 			const int size = 16 * MB;
 			const uint initCounter = 0;
 			byte[] data = new byte[size];
-			byte[] key = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.KeySize];
-			byte[] iv = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.IVSize];
+			byte[] key = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.KeySize];
+			byte[] iv = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.IVSize];
 			byte[] expected = new byte[size];
 			RandomBuffers(42, data, key, iv);
 			using (var aesCsharp = new AesCsharp(key, iv))
@@ -62,7 +62,7 @@
 			}
 
 			byte[] actual = data;
-			using (var aes = new SecureData.Cryptography.SymmetricEncryption.Aes(key, iv))
+			using (var aes = new SecureData.Cryptography.SymmetricEncryption.AesCtr(key, iv))
 			{
 				aes.Transform(actual, initCounter);
 			}
@@ -75,8 +75,8 @@
 			const int size = 16 * MB;
 			const uint initCounter = 0;
 			byte[] data = new byte[size];
-			byte[] key = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.KeySize];
-			byte[] iv = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.IVSize];
+			byte[] key = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.KeySize];
+			byte[] iv = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.IVSize];
 			byte[] expected = new byte[size];
 			RandomBuffers(42, data, key, iv);
 			using (var aesCsharp = new AesCsharp(key, iv))
@@ -85,7 +85,7 @@
 			}
 
 			byte[] actual = data;
-			using (var aes = new SecureData.Cryptography.SymmetricEncryption.Aes(key, iv))
+			using (var aes = new SecureData.Cryptography.SymmetricEncryption.AesCtr(key, iv))
 			{
 				aes.Transform(data, actual, initCounter);
 			}
@@ -110,18 +110,18 @@
 			const int size = 16 * MB;
 			const uint initCounter = 0;
 			byte[] data = new byte[size];
-			byte[] key = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.KeySize];
-			byte[] iv = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.IVSize];
+			byte[] key = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.KeySize];
+			byte[] iv = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.IVSize];
 			byte[] expected = new byte[size];
 			RandomBuffers(42, data, key, iv);
 			data.CopyTo((Span<byte>)expected);
 
 			byte[] actual = data;
-			using (var aes = new SecureData.Cryptography.SymmetricEncryption.Aes(key, iv))
+			using (var aes = new SecureData.Cryptography.SymmetricEncryption.AesCtr(key, iv))
 			{
 				aes.Transform(actual, initCounter);
 			}
-			using (var aes = new SecureData.Cryptography.SymmetricEncryption.Aes(key, iv))
+			using (var aes = new SecureData.Cryptography.SymmetricEncryption.AesCtr(key, iv))
 			{
 				aes.Transform(actual, initCounter);
 			}
@@ -132,8 +132,8 @@
 		private static void Test(int size, uint initCounter)
 		{
 			byte[] data = new byte[size];
-			byte[] key = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.KeySize];
-			byte[] iv = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.IVSize];
+			byte[] key = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.KeySize];
+			byte[] iv = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.IVSize];
 			byte[] expected = new byte[size];
 			RandomBuffers(42, data, key, iv);
 			using (var aesCsharp = new AesCsharp(key, iv))
@@ -142,7 +142,7 @@
 			}
 
 			byte[] actual = new byte[size];
-			using (var aes = new SecureData.Cryptography.SymmetricEncryption.Aes(key, iv))
+			using (var aes = new SecureData.Cryptography.SymmetricEncryption.AesCtr(key, iv))
 			{
 				aes.Transform(data, actual, initCounter);
 			}
@@ -151,10 +151,10 @@
 		}
 		private static void TestBlock(uint initCounter)
 		{
-			const int size = SecureData.Cryptography.SymmetricEncryption.Aes.BlockSize;
+			const int size = SecureData.Cryptography.SymmetricEncryption.AesCtr.BlockSize;
 			byte[] data = new byte[size];
-			byte[] key = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.KeySize];
-			byte[] iv = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.IVSize];
+			byte[] key = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.KeySize];
+			byte[] iv = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.IVSize];
 			byte[] expected = new byte[size];
 			RandomBuffers(42, data, key, iv);
 			using (var aesCsharp = new AesCsharp(key, iv))
@@ -163,7 +163,7 @@
 			}
 
 			byte[] actual = new byte[size];
-			using (var aes = new SecureData.Cryptography.SymmetricEncryption.Aes(key, iv))
+			using (var aes = new SecureData.Cryptography.SymmetricEncryption.AesCtr(key, iv))
 			{
 				aes.TransformBlock(data, actual, initCounter);
 			}

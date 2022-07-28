@@ -11,14 +11,14 @@ namespace SecureData.Tests.Cryptography.Streams.CryptoStream
 		static CryptoStreamTest()
 		{
 			Random r = new(42);
-			Key = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.KeySize];
-			IV = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.IVSize];
+			Key = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.KeySize];
+			IV = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.IVSize];
 			Data = new byte[DataSize];
 			DataEncrypted = new byte[DataSize];
 			r.NextBytes(Key);
 			r.NextBytes(IV);
 			r.NextBytes(Data);
-			using (var aes = new SecureData.Cryptography.SymmetricEncryption.Aes(Key, IV))
+			using (var aes = new SecureData.Cryptography.SymmetricEncryption.AesCtr(Key, IV))
 			{
 				aes.Transform(Data, DataEncrypted, 0);
 			}
@@ -31,17 +31,17 @@ namespace SecureData.Tests.Cryptography.Streams.CryptoStream
 			=> new(new MemoryStream(array), Key, IV, true);
 
 
-		protected readonly SecureData.Cryptography.SymmetricEncryption.Aes Aes;
+		protected readonly SecureData.Cryptography.SymmetricEncryption.AesCtr Aes;
 		public CryptoStreamTest()
 		{
-			Aes = new SecureData.Cryptography.SymmetricEncryption.Aes(Key, IV);
+			Aes = new SecureData.Cryptography.SymmetricEncryption.AesCtr(Key, IV);
 		}
 
 		public virtual void Dispose()
 		{
 			Random r = new(42);
-			Span<byte> key = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.KeySize];
-			Span<byte> iv = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.IVSize];
+			Span<byte> key = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.KeySize];
+			Span<byte> iv = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.IVSize];
 			Span<byte> data = new byte[DataSize];
 			r.NextBytes(key);
 			r.NextBytes(iv);
@@ -59,7 +59,7 @@ namespace SecureData.Tests.Cryptography.Streams.CryptoStream
 				throw new Exception("Data corrupted");
 			}
 
-			using (var taes = new SecureData.Cryptography.SymmetricEncryption.Aes(key, iv))
+			using (var taes = new SecureData.Cryptography.SymmetricEncryption.AesCtr(key, iv))
 			{
 				Span<byte> dataEncrypted = new byte[DataSize];
 				taes.Transform(data, dataEncrypted, 0);

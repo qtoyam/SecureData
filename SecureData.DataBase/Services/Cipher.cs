@@ -4,16 +4,16 @@ namespace SecureData.DataBase.Services
 {
 	public sealed class Cipher : IDisposable
 	{
-		public const int BlockSize = Aes.BlockSize;
+		public static readonly int BlockSize = AesCtr.BlockSize;
 
-		private readonly Aes _aes;
+		private readonly AesCtr _aes;
 		private bool _isLocal;
 
 		private uint _currentId;
 
 		internal Cipher(ReadOnlySpan<byte> key, ReadOnlySpan<byte> iv, bool isLocal)
 		{
-			_aes = new Aes(key, iv)
+			_aes = new AesCtr(key, iv)
 			{
 				Counter = 0U
 			};

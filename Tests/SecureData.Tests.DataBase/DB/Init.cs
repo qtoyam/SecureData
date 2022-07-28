@@ -4,6 +4,7 @@ using SecureData.Cryptography.Hash;
 using SecureData.Cryptography.Streams;
 using SecureData.Cryptography.SymmetricEncryption;
 using SecureData.DataBase.Helpers;
+using SecureData.DataBase.Models;
 
 namespace SecureData.Tests.DataBase.DB
 {
@@ -16,24 +17,24 @@ namespace SecureData.Tests.DataBase.DB
 			DeleteFile(path);
 			try
 			{
-				Span<byte> key = new byte[Aes.KeySize];
-				Span<byte> data = new byte[Sizes.DBSize];
-				Span<byte> salt = data.Slice(Sizes.SaltOffset, Sizes.SaltSize);
-				Span<byte> hash = data.Slice(Sizes.HashOffset, Sizes.HashSize);
-				Span<byte> rng = data.Slice(Sizes.RNGOffset, Sizes.RNGSize);
+				Span<byte> key = new byte[AesCtr.KeySize];
+				Span<byte> data = new byte[DBHeader.Layout.RNGSize + DBHeader.Size];
+				Span<byte> salt = data.Slice(DBHeader.Layout.SaltOffset, DBHeader.Layout.SaltSize);
+				Span<byte> hash = data.Slice(DBHeader.Layout.HashOffset, DBHeader.Layout.HashSize);
+				Span<byte> rng = data.Slice(DBHeader.Layout.RNGOffset, DBHeader.Layout.RNGSize);
 				string login = "MY LOGINn12377842189&^#&^@!89sa;as\"" + '\0'; //null terminate cauze we emulate creation of file
 				uint version = 1;
 				RNG(key, data);
-				BinaryHelper.Write(data.Slice(Sizes.VersionOffset), version);
-				BinaryHelper.Write(data.Slice(Sizes.LoginOffset, Sizes.LoginSize), Encoding.UTF8.GetBytes(login));
-				SHA256.ComputeHash(data.Slice(Sizes.HashStart), hash);
+				BinaryHelper.Write(data.Slice(DBHeader.Layout.VersionOffset), version);
+				BinaryHelper.Write(data.Slice(DBHeader.Layout.LoginOffset, DBHeader.Layout.LoginSize), Encoding.UTF8.GetBytes(login));
+				SHA256.ComputeHash(data.Slice(DBHeader.HashStart), hash);
 				using (var bcs = new BlockCryptoStream(path,
 					new FileStreamOptions() { Access = FileAccess.Write, Mode = FileMode.Create }, key, salt))
 				{
-					bcs.WriteThroughEncryption(data.Slice(0, Sizes.SelfEncryptStart));
-					bcs.Write(data.Slice(Sizes.SelfEncryptStart));
+					bcs.WriteThroughEncryption(data.Slice(0, DBHeader.Layout.RNGOffset));
+					bcs.Write(data.Slice(DBHeader.Layout.RNGOffset));
 				}
-				using (var db = new SecureData.DataBase.DB(path, false))
+				using (var db = new SecureData.DataBase.DB(path))
 				{
 					bool res = db.TryInit(key);
 					Assert.True(res);
@@ -60,24 +61,24 @@ namespace SecureData.Tests.DataBase.DB
 			DeleteFile(path);
 			try
 			{
-				Span<byte> key = new byte[Aes.KeySize];
-				Span<byte> data = new byte[Sizes.DBSize];
-				Span<byte> salt = data.Slice(Sizes.SaltOffset, Sizes.SaltSize);
-				Span<byte> hash = data.Slice(Sizes.HashOffset, Sizes.HashSize);
-				Span<byte> rng = data.Slice(Sizes.RNGOffset, Sizes.RNGSize);
+				Span<byte> key = new byte[AesCtr.KeySize];
+				Span<byte> data = new byte[DBHeader.Layout.RNGSize + DBHeader.Size];
+				Span<byte> salt = data.Slice(DBHeader.Layout.SaltOffset, DBHeader.Layout.SaltSize);
+				Span<byte> hash = data.Slice(DBHeader.Layout.HashOffset, DBHeader.Layout.HashSize);
+				Span<byte> rng = data.Slice(DBHeader.Layout.RNGOffset, DBHeader.Layout.RNGSize);
 				string login = "MY LOGINn12377842189&^#&^@!89sa;as\"" + '\0';
 				uint version = 1;
 				RNG(key, data);
-				BinaryHelper.Write(data.Slice(Sizes.VersionOffset), version);
-				BinaryHelper.Write(data.Slice(Sizes.LoginOffset, Sizes.LoginSize), Encoding.UTF8.GetBytes(login));
-				SHA256.ComputeHash(data.Slice(Sizes.HashStart), hash);
+				BinaryHelper.Write(data.Slice(DBHeader.Layout.VersionOffset), version);
+				BinaryHelper.Write(data.Slice(DBHeader.Layout.LoginOffset, DBHeader.Layout.LoginSize), Encoding.UTF8.GetBytes(login));
+				SHA256.ComputeHash(data.Slice(DBHeader.HashStart), hash);
 				using (var bcs = new BlockCryptoStream(path,
 					new FileStreamOptions() { Access = FileAccess.Write, Mode = FileMode.Create }, key, salt))
 				{
-					bcs.WriteThroughEncryption(data.Slice(0, Sizes.SelfEncryptStart));
-					bcs.Write(data.Slice(Sizes.SelfEncryptStart));
+					bcs.WriteThroughEncryption(data.Slice(0, DBHeader.Layout.RNGOffset));
+					bcs.Write(data.Slice(DBHeader.Layout.RNGOffset));
 				}
-				using (var db = new SecureData.DataBase.DB(path, false))
+				using (var db = new SecureData.DataBase.DB(path))
 				{
 					key[1]++; //modify key
 					bool res = db.TryInit(key);

@@ -12,20 +12,16 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 
-using SecureData.Manager.ViewModels;
-
 namespace SecureData.Manager.Views
 {
 	/// <summary>
-	/// Interaction logic for AppWindow.xaml
+	/// Interaction logic for LoginWindow.xaml
 	/// </summary>
-	public partial class AppWindow : Window
+	public partial class LoginWindow : Window
 	{
-		public AppWindow(AppWindowVM viewModel)
+		public LoginWindow()
 		{
-			DataContext = viewModel;
 			InitializeComponent();
-			Style = (Style)Application.Current.Resources["CustomWindowChrome"];
 		}
 	}
 }

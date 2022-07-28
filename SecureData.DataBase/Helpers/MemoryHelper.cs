@@ -4,6 +4,7 @@
 	{
 		public static void RNG(Span<byte> data)
 		{
+			//TODO: strange fill
 			System.Security.Cryptography.RandomNumberGenerator.Fill(data);
 		}
 

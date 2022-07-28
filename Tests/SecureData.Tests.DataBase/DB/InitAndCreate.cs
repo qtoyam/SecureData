@@ -9,8 +9,8 @@ namespace SecureData.Tests.DataBase.DB
 		{
 			string path = $"{nameof(InitAndCreate_NoData)}TMP0.tmp";
 			DeleteFile(path);
-			Span<byte> key = new byte[Aes.KeySize];
-			Span<byte> iv = new byte[Aes.IVSize];
+			Span<byte> key = new byte[AesCtr.KeySize];
+			Span<byte> iv = new byte[AesCtr.IVSize];
 			string login = "MY LOGINn12377842189&^#&^@!89sa;as\"";
 			byte[] exp_hash, act_hash;
 			byte[] exp_salt, act_salt;
@@ -18,14 +18,14 @@ namespace SecureData.Tests.DataBase.DB
 			RNG(key, iv);
 			try
 			{
-				using(var db = new SecureData.DataBase.DB(path, true))
+				using(var db = new SecureData.DataBase.DB(path))
 				{
 					db.Create(key, iv,login);
 					exp_hash = db.Hash.ToArray();
 					exp_salt = db.Salt.ToArray();
 					exp_version = db.Version;
 				}
-				using(var db = new SecureData.DataBase.DB(path, false))
+				using(var db = new SecureData.DataBase.DB(path))
 				{
 					bool res = db.TryInit(key);
 					Assert.True(res);

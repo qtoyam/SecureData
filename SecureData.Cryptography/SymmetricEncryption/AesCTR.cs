@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace SecureData.Cryptography.SymmetricEncryption
 {
-	public class Aes : IDisposable
+	public class AesCtr : IDisposable
 	{
 		#region Consts
 		public const int BlockSize = 16;
@@ -16,14 +16,14 @@ namespace SecureData.Cryptography.SymmetricEncryption
 
 		public uint Counter { get; set; }
 
-		private Aes(AesSafeHandle handle, uint counter)
+		private AesCtr(AesSafeHandle handle, uint counter)
 		{
 			_handle = handle;
 			Counter = counter;
 		}
 
-		public Aes() : this(Native.AES_CreateHandle(), 0U) { }
-		public Aes(ReadOnlySpan<byte> key, ReadOnlySpan<byte> iv) : this()
+		public AesCtr() : this(Native.AES_CreateHandle(), 0U) { }
+		public AesCtr(ReadOnlySpan<byte> key, ReadOnlySpan<byte> iv) : this()
 		{
 			SetKeyIV(key, iv);
 		}
@@ -150,11 +150,17 @@ namespace SecureData.Cryptography.SymmetricEncryption
 			GC.SuppressFinalize(this);
 		}
 
-		public Aes Clone()
+		public void CopyTo(AesCtr destination)
 		{
-			AesSafeHandle newHandle = Native.AES_CreateHandle();
-			Native.AES_Clone(_handle, newHandle);
-			return new Aes(newHandle, Counter);
+			Native.AES_Clone(_handle, destination._handle);
+			destination.Counter = this.Counter;
+		}
+
+		public AesCtr Clone()
+		{
+			AesCtr newAes = new();
+			CopyTo(newAes);
+			return newAes;
 		}
 
 		#region Helpers
@@ -166,6 +172,7 @@ namespace SecureData.Cryptography.SymmetricEncryption
 		{
 			return (size & (BlockSize - 1)) == 0;
 		}
+		public static uint ConvertToCTR(long pos) => (uint)(pos >> BlockSizeShift);
 		#endregion
 		private sealed class AesSafeHandle : SafeHandle
 		{

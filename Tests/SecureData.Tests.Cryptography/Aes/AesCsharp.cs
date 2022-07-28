@@ -13,14 +13,14 @@ namespace SecureData.Tests.Cryptography.Aes
 		{
 			using (var aes = System.Security.Cryptography.Aes.Create())
 			{
-				aes.BlockSize = SecureData.Cryptography.SymmetricEncryption.Aes.BlockSize * 8;
-				aes.KeySize = SecureData.Cryptography.SymmetricEncryption.Aes.KeySize * 8;
+				aes.BlockSize = SecureData.Cryptography.SymmetricEncryption.AesCtr.BlockSize * 8;
+				aes.KeySize = SecureData.Cryptography.SymmetricEncryption.AesCtr.KeySize * 8;
 				aes.Mode = CipherMode.ECB;
 				aes.Padding = PaddingMode.None;
 				_aes = aes.CreateEncryptor(key, null);
 			}
-			_iv = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.IVSize];
-			for (int i = 0; i < SecureData.Cryptography.SymmetricEncryption.Aes.IVSize; i++)
+			_iv = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.IVSize];
+			for (int i = 0; i < SecureData.Cryptography.SymmetricEncryption.AesCtr.IVSize; i++)
 			{
 				_iv[i] = iv[i];
 			}
@@ -28,16 +28,16 @@ namespace SecureData.Tests.Cryptography.Aes
 
 		public void Transform(byte[] input, byte[] output, uint initialCounter)
 		{
-			byte[] tiv = new byte[SecureData.Cryptography.SymmetricEncryption.Aes.IVSize];
-			for (int i = 0; i < SecureData.Cryptography.SymmetricEncryption.Aes.IVSize; i++)
+			byte[] tiv = new byte[SecureData.Cryptography.SymmetricEncryption.AesCtr.IVSize];
+			for (int i = 0; i < SecureData.Cryptography.SymmetricEncryption.AesCtr.IVSize; i++)
 			{
 				tiv[i] = _iv[i];
 			}
 			AddCounter(tiv, initialCounter);
 			// encrypt all counters
-			for (int offset = 0; offset < input.Length; offset += SecureData.Cryptography.SymmetricEncryption.Aes.BlockSize)
+			for (int offset = 0; offset < input.Length; offset += SecureData.Cryptography.SymmetricEncryption.AesCtr.BlockSize)
 			{
-				_aes.TransformBlock(tiv, 0, SecureData.Cryptography.SymmetricEncryption.Aes.BlockSize, output, offset);
+				_aes.TransformBlock(tiv, 0, SecureData.Cryptography.SymmetricEncryption.AesCtr.BlockSize, output, offset);
 				IncrCounter(tiv);
 			}
 			// xor all input and output(encrypted counters)

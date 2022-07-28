@@ -20,15 +20,14 @@ namespace SecureData.DataBase.Models
 			public const int SaltSize = 16;
 			public const int SaltOffset = VersionSize + VersionOffset;
 
-			public const int LoginSize = 256;
+			public const int LoginSize = 64;
 			public const int LoginOffset = SaltSize + SaltOffset;
+
+			public const int RNGOffset = LoginSize + LoginOffset;
+			public const int RNGSize = 16;
 		}
-		public int Size => Layout.LoginOffset + Layout.LoginSize;
-		public int DBSize => Size + RNGSize;
-		public int RNGOffset => Size;
-		public int RNGSize => 11968;
-		public int HashStart => Layout.HashSize;
-		public int SelfEncryptStart => RNGOffset;
+		public const int Size = Layout.LoginOffset + Layout.LoginSize;
+		public const int HashStart = Layout.VersionOffset;
 
 		public bool IsInited => _version != 0;
 
@@ -79,7 +78,7 @@ namespace SecureData.DataBase.Models
 			}
 			Span<byte> raw = RawMemory.Span;
 			BinaryHelper.Write(raw.Slice(Layout.VersionOffset, Layout.VersionSize), _version);
-			BinaryHelper.WriteWRNG(raw.Slice(Layout.LoginOffset, Layout.LoginSize), _login);
+			BinaryHelper.WriteStringWithRNG(raw.Slice(Layout.LoginOffset, Layout.LoginSize), _login);
 			Changes = 0;
 		}
 
