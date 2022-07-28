@@ -127,6 +127,27 @@ namespace SecureData.Cryptography.SymmetricEncryption
 		}
 
 		/// <summary>
+		/// Zero out IV and key.
+		/// </summary>
+		public void Clear()
+		{
+			Native.AES_ClearKeyIV(_handle);
+		}
+
+		public void CopyTo(AesCtr destination)
+		{
+			Native.AES_Clone(_handle, destination._handle);
+			destination.Counter = this.Counter;
+		}
+		public AesCtr Clone()
+		{
+			AesCtr newAes = new();
+			CopyTo(newAes);
+			return newAes;
+		}
+
+
+		/// <summary>
 		/// Add <paramref name="value"/> to first 64 bits of IV.
 		/// </summary>
 		/// <param name="value"></param>
@@ -150,18 +171,6 @@ namespace SecureData.Cryptography.SymmetricEncryption
 			GC.SuppressFinalize(this);
 		}
 
-		public void CopyTo(AesCtr destination)
-		{
-			Native.AES_Clone(_handle, destination._handle);
-			destination.Counter = this.Counter;
-		}
-
-		public AesCtr Clone()
-		{
-			AesCtr newAes = new();
-			CopyTo(newAes);
-			return newAes;
-		}
 
 		#region Helpers
 		public static bool IsValidSize(int size)
@@ -192,6 +201,8 @@ namespace SecureData.Cryptography.SymmetricEncryption
 			public static extern unsafe void AES_SetIV(AesSafeHandle handle, void* iv);
 			[DllImport(DllImportManager.DllName)]
 			public static extern void AES_DestroyHandle(IntPtr handle);
+			[DllImport(DllImportManager.DllName)]
+			public static extern void AES_ClearKeyIV(AesSafeHandle handle);
 			[DllImport(DllImportManager.DllName)]
 			public static extern void AES_Clone(AesSafeHandle source, AesSafeHandle destination);
 			[DllImport(DllImportManager.DllName)]
