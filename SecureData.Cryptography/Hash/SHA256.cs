@@ -123,19 +123,19 @@ namespace SecureData.Cryptography.Hash
 				return handle;
 			}
 
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			private static extern void SHA256_CreateHandle(out SHA256SafeHandle handle);
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			public static extern void SHA256_DestroyHandle(IntPtr handle);
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			public static extern void SHA256_Initialize(SHA256SafeHandle handle);
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			public static extern unsafe void SHA256_Transform(SHA256SafeHandle handle, void* input, UInt64 size);
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			public static extern unsafe void SHA256_Finalize(SHA256SafeHandle handle, void* output);
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			public static extern void SHA256_Clone(SHA256SafeHandle source, SHA256SafeHandle destination);
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			public static extern unsafe void SHA256_GenerateHash(void* input, void* output, UInt64 size);
 		}
 

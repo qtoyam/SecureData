@@ -24,6 +24,6 @@ public class FolderData : Data
 	}
 
 	public override void ClearSensitive() { }
-	public override void LoadSensitive(ReadOnlySpan<byte> raw) { }
+	public override void LoadSensitive(ReadOnlySpan<byte> sensitiveBytes) { }
 	protected override void FlushCore(Span<byte> raw) { }
 }

@@ -4,11 +4,10 @@ using System.Linq.Expressions;
 using System.Reflection;
 
 using SecureData.Cryptography.Hash;
-using SecureData.DataBase.Helpers;
-using SecureData.DataBase.Services;
 using SecureData.DataBase.Exceptions;
+using SecureData.DataBase.Helpers;
 
-//TODO:0 const -> static
+//TODO:0 const -> static?
 namespace SecureData.DataBase.Models.Abstract;
 
 public abstract class Data
@@ -18,7 +17,7 @@ public abstract class Data
 	public const int MinSizeToRead = Layout.DataTypeOffset + Layout.DataTypeSize;
 
 	private const int HashStart = Layout.DataTypeOffset;
-	public static readonly int DividableBy = Cipher.BlockSize;
+	public const int DividableBy = Cryptography.SymmetricEncryption.AesCtr.BlockSize;
 
 	private static uint _lastId = NullId;
 	private static uint GetId()
@@ -26,68 +25,9 @@ public abstract class Data
 		uint id = Interlocked.Increment(ref _lastId);
 		if (id == uint.MaxValue)
 		{
-			throw new InvalidOperationException("Id overflow.");
+			throw new UnexpectedException("Id overflow.");
 		}
 		return id;
-	}
-
-	private delegate Data DataCreator(ReadOnlySpan<byte> data);
-	private readonly static (long DataType, int Size, DataCreator Creator)[] Types;
-
-	static Data()
-	{
-		int value_SizeConst;
-		var type_Data = typeof(Data);
-		List<(long DataType, int Size, DataCreator Creator)> types = new();
-		ParameterExpression param_Raw = Expression.Parameter(typeof(ReadOnlySpan<byte>));
-		Type[] params_Ctor = new Type[] { typeof(ReadOnlySpan<byte>) };
-		foreach (var a in AppDomain.CurrentDomain
-			.GetAssemblies()
-			.Where(x => !x.IsDynamic))
-		{
-			foreach (var t in a
-				.ExportedTypes
-				.Where(x => x.IsClass && !x.IsAbstract && x.IsSubclassOf(type_Data))
-				)
-			{
-				//data type
-				var field_DataTypeConst = t.GetField(nameof(DataTypeConst), BindingFlags.NonPublic | BindingFlags.Static)
-					?? throw new NotImplementedException($"Type \"{t.FullName}\", not implemented const field {nameof(DataTypeConst)}.");
-				long value_DataTypeConst = (long)field_DataTypeConst.GetValue(null)!;
-				if (value_DataTypeConst == DeletedFlag)
-				{
-					throw new NotImplementedException($"Type \"{t.FullName}\", const field {nameof(DataTypeConst)} can not be equals to {nameof(DeletedFlag)}. It is reserved.");
-				}
-				//size
-				var field_SizeConst = t.GetField(nameof(SizeConst), BindingFlags.NonPublic | BindingFlags.Static)
-					?? throw new NotImplementedException($"Type \"{t.FullName}\", not implemented const field {nameof(SizeConst)}.");
-				value_SizeConst = (int)field_SizeConst.GetValue(null)!;
-				if ((value_SizeConst % DividableBy) != 0)
-				{
-					throw new NotImplementedException($"Type \"{t.FullName}\", const field {nameof(SizeConst)} value not dividable by {nameof(DividableBy)}.");
-				}
-
-				var ctor = t.GetConstructor(BindingFlags.NonPublic | BindingFlags.Instance, params_Ctor)
-					?? throw new NotImplementedException($"Type \"{t.FullName}\", not implemented protected constructor with {nameof(ReadOnlySpan<byte>)} as parameter.");
-				var creator = Expression.Lambda<DataCreator>(
-					   Expression.New(ctor, param_Raw), param_Raw
-					   ).Compile();
-				types.Add(new(value_DataTypeConst, value_SizeConst, creator));
-			}
-		}
-		Types = types.ToArray();
-		for (int i = 0; i < Types.Length - 1; i++)
-		{
-			var currentDataType = Types[i].DataType;
-			for (int j = i + 1; j < Types.Length; j++)
-			{
-				var comparedDataType = Types[j].DataType;
-				if (currentDataType == comparedDataType)
-				{
-					throw new InvalidOperationException($"Multiple data types have same data type identifier ({currentDataType})");
-				}
-			}
-		}
 	}
 
 	private uint _state = NullId;
@@ -126,20 +66,27 @@ public abstract class Data
 	protected const int SizeConst = Layout.DescriptionOffset + Layout.DescriptionSize;
 	protected const long DataTypeConst = DeletedFlag;
 
+	/// <summary>
+	/// Init data before <see cref="SensitiveOffset"/>.
+	/// </summary>
+	/// <param name="raw"></param>
 	protected Data(ReadOnlySpan<byte> raw)
 	{
-		Debug.Assert(raw.Length >= Size);
+		Debug.Assert(raw.Length >= PublicSize);
+		//skip id
 		BinaryHelper.ReadBytes(raw.Slice(Layout.HashOffset, Layout.HashSize), _hash.Span);
 		TimeStamp = BinaryHelper.ReadDateTime(raw.Slice(Layout.TimeStampOffset, Layout.TimeStampSize));
-		//skip parent
+		_state = BinaryHelper.ReadUInt32(raw.Slice(Layout.ParentIdOffset, Layout.ParentIdSize));
 		_lastEdit = BinaryHelper.ReadDateTime(raw.Slice(Layout.LastEditOffset, Layout.LastEditSize));
 		_name = BinaryHelper.ReadString(raw.Slice(Layout.NameOffset, Layout.NameSize));
 		_description = BinaryHelper.ReadString(raw.Slice(Layout.DescriptionOffset, Layout.DescriptionSize));
 	}
+	/// <summary>
+	/// Set defaults.
+	/// </summary>
 	protected Data()
 	{
-		_name = string.Empty;
-		_description = string.Empty;
+		_name = _description = string.Empty;
 	}
 
 	[MemberNotNullWhen(true, nameof(Parent))]
@@ -180,7 +127,13 @@ public abstract class Data
 	#endregion
 
 	public abstract void ClearSensitive();
-	public abstract void LoadSensitive(ReadOnlySpan<byte> rawBytes);
+	/// <summary>
+	/// Load sensitive fields/properties from <paramref name="sensitiveBytes"/>.
+	/// </summary>
+	/// <param name="sensitiveBytes">
+	/// Data raw bytes from <see cref="SensitiveOffset"/>.
+	/// </param>
+	public abstract void LoadSensitive(ReadOnlySpan<byte> sensitiveBytes);
 
 
 	/// <summary>
@@ -189,76 +142,7 @@ public abstract class Data
 	public abstract int Size { get; }
 	public abstract int SensitiveOffset { get; }
 
-	public bool HasSensitiveContent => SensitiveOffset < Size;
-
-	/// <summary>
-	/// Try to create initialized <see cref="Data"/> from <paramref name="buffer"/>.
-	/// </summary>
-	/// <param name="buffer"></param>
-	/// <param name="data"></param>
-	/// <param name="readBytes">
-	/// Byts processed in <paramref name="buffer"/>.
-	/// </param>
-	/// <returns>
-	/// <see langword="true"/> if created, otherwise <see langword="false"/>.
-	/// </returns>
-	internal static bool TryCreateFromBuffer(ReadOnlySpan<byte> buffer, [NotNullWhen(true)] out Data? data, out int readBytes)
-	{
-		Debug.Assert(buffer.Length >= MinSizeToRead);
-		long dataType = BinaryHelper.ReadInt64(buffer.Slice(Layout.DataTypeOffset, Layout.DataTypeSize));
-		bool deleted = (dataType & DeletedFlag) == DeletedFlag;
-		dataType &= ~DeletedFlag; //remove ONLY deleted flag
-		var type = Types.Single(x => x.DataType == dataType);
-		if (type.Size > buffer.Length)
-		{
-			data = null;
-			readBytes = 0;
-			return false;
-		}
-		readBytes = type.Size;
-		buffer = buffer.Slice(0, readBytes);
-		uint id = BinaryHelper.ReadUInt32(buffer.Slice(Layout.IdOffset, Layout.IdSize));
-		if (id > _lastId)
-		{
-			_lastId = id;
-		}
-		if (deleted)
-		{
-			data = null;
-			return false;
-		}
-		data = type.Creator(buffer);
-		data.Id = id;
-		data._state = BinaryHelper.ReadUInt32(buffer.Slice(Layout.ParentIdOffset, Layout.ParentIdSize));
-		Span<byte> s_actualHash = stackalloc byte[SHA256.HashSize];
-		SHA256.ComputeHash(buffer.Slice(HashStart), s_actualHash);
-		if(!MemoryHelper.Compare(data.Hash.Span, s_actualHash))
-		{
-			throw new DataBaseWrongHashException();
-		}
-		return true;
-	}
-
-	internal static void OrganizeHierarchy(DataSet dataSet, IList<Data> root)
-	{
-		foreach (var data in dataSet)
-		{
-			data.EnsureNotInited();
-			uint parentId = data._state;
-			if (parentId != NullId)
-			{
-				FolderData parent = (FolderData?)dataSet[parentId]
-					?? throw new InvalidOperationException("Parent mismatch.");
-				data._parent = parent;
-				parent.Add(data);
-			}
-			else //no parent
-			{
-				root.Add(data);
-			}
-			data.FinishInit();
-		}
-	}
+	internal int PublicSize => SensitiveOffset;
 
 	public void FinishInit()
 	{
@@ -318,6 +202,7 @@ public abstract class Data
 			++Changes;
 		}
 	}
+
 	/// <summary>
 	/// Ensures no changes in object.
 	/// </summary>
@@ -342,5 +227,147 @@ public abstract class Data
 		{
 			throw new InvalidOperationException("Object is inited.");
 		}
+	}
+
+	internal readonly ref struct Metadata
+	{
+		private delegate Data DataCreator(ReadOnlySpan<byte> data);
+		private record DataMetadata(long DataType, int Size, DataCreator Creator);
+		private readonly ReadOnlySpan<DataMetadata> _dataMetadata;
+
+		private DataMetadata this[long dataType]
+		{
+			get
+			{
+				for (int i = 0; i < _dataMetadata.Length; i++)
+				{
+					if (_dataMetadata[i].DataType == dataType)
+					{
+						return _dataMetadata[i];
+					}
+				}
+				throw new ArgumentOutOfRangeException(nameof(dataType), "Can not find data metadata");
+			}
+		}
+
+		public Metadata()
+		{
+			int value_SizeConst;
+			var type_Data = typeof(Data);
+			List<DataMetadata> metadata = new();
+			ParameterExpression param_Raw = Expression.Parameter(typeof(ReadOnlySpan<byte>));
+			Type[] params_Ctor = new Type[] { typeof(ReadOnlySpan<byte>) };
+			foreach (var a in AppDomain.CurrentDomain
+				.GetAssemblies()
+				.Where(x => !x.IsDynamic))
+			{
+				foreach (var t in a
+					.ExportedTypes
+					.Where(x => x.IsClass && !x.IsAbstract && x.IsSubclassOf(type_Data))
+					)
+				{
+					//data type
+					var field_DataTypeConst = t.GetField(nameof(DataTypeConst), BindingFlags.NonPublic | BindingFlags.Static)
+						?? throw new NotImplementedException($"Type \"{t.FullName}\", not implemented const field {nameof(DataTypeConst)}.");
+					long value_DataTypeConst = (long)field_DataTypeConst.GetValue(null)!;
+					if (value_DataTypeConst == DeletedFlag)
+					{
+						throw new NotImplementedException($"Type \"{t.FullName}\", const field {nameof(DataTypeConst)} can not be equals to {nameof(DeletedFlag)}. It is reserved.");
+					}
+					//size
+					var field_SizeConst = t.GetField(nameof(SizeConst), BindingFlags.NonPublic | BindingFlags.Static)
+						?? throw new NotImplementedException($"Type \"{t.FullName}\", not implemented const field {nameof(SizeConst)}.");
+					value_SizeConst = (int)field_SizeConst.GetValue(null)!;
+					if ((value_SizeConst % DividableBy) != 0)
+					{
+						throw new NotImplementedException($"Type \"{t.FullName}\", const field {nameof(SizeConst)} value not dividable by {nameof(DividableBy)}.");
+					}
+
+					var ctor = t.GetConstructor(BindingFlags.NonPublic | BindingFlags.Instance, params_Ctor)
+						?? throw new NotImplementedException($"Type \"{t.FullName}\", not implemented protected constructor with {nameof(ReadOnlySpan<byte>)} as parameter.");
+					var creator = Expression.Lambda<DataCreator>(
+						   Expression.New(ctor, param_Raw), param_Raw
+						   ).Compile();
+					metadata.Add(new(value_DataTypeConst, value_SizeConst, creator));
+				}
+			}
+			_dataMetadata = metadata.ToArray();
+			for (int i = 0; i < _dataMetadata.Length - 1; i++)
+			{
+				var currentDataType = _dataMetadata[i].DataType;
+				for (int j = i + 1; j < _dataMetadata.Length; j++)
+				{
+					var comparedDataType = _dataMetadata[j].DataType;
+					if (currentDataType == comparedDataType)
+					{
+						throw new InvalidOperationException($"Multiple data types have same data type identifier ({currentDataType})");
+					}
+				}
+			}
+
+		}
+
+		/// <summary>
+		/// Try to create initialized <see cref="Data"/> from <paramref name="buffer"/>.
+		/// </summary>
+		/// <param name="readBytes">
+		/// Bytes processed in <paramref name="buffer"/>.
+		/// </param>
+		/// <returns>
+		/// <see langword="true"/> if created, otherwise <see langword="false"/>.
+		/// </returns>
+		public bool TryCreate(ReadOnlySpan<byte> buffer, [NotNullWhen(true)] out Data? data, out int readBytes)
+		{
+			Debug.Assert(buffer.Length >= MinSizeToRead);
+			long dataType = BinaryHelper.ReadInt64(buffer.Slice(Layout.DataTypeOffset, Layout.DataTypeSize));
+			bool deleted = (dataType & DeletedFlag) == DeletedFlag;
+			dataType &= ~DeletedFlag; //remove ONLY deleted flag
+			DataMetadata type = this[dataType];
+			if (type.Size > buffer.Length)
+			{
+				data = null;
+				readBytes = 0;
+				return false;
+			}
+			readBytes = type.Size;
+			buffer = buffer.Slice(0, readBytes);
+			uint id = BinaryHelper.ReadUInt32(buffer.Slice(Layout.IdOffset, Layout.IdSize));
+			if (id > _lastId)
+			{
+				_lastId = id;
+			}
+			if (deleted)
+			{
+				data = null;
+				return false;
+			}
+			data = type.Creator(buffer);
+			data.Id = id;
+			Span<byte> s_actualHash = stackalloc byte[SHA256.HashSize];
+			SHA256.ComputeHash(buffer.Slice(HashStart), s_actualHash);
+			if (!MemoryHelper.Compare(data.Hash.Span, s_actualHash))
+			{
+				throw new DataBaseWrongHashException();
+			}
+			return true;
+		}
+
+		public void OrganizeHierarchy(DataSet dataSet)
+		{
+			foreach (var data in dataSet)
+			{
+				data.EnsureNotInited();
+				uint parentId = data._state;
+				if (parentId != NullId)
+				{
+					FolderData parent = (FolderData?)dataSet[parentId]
+						?? throw new UnexpectedException("Parent mismatch.");
+					data._parent = parent;
+					parent.Add(data);
+				}
+				data.FinishInit();
+			}
+		}
+
 	}
 }

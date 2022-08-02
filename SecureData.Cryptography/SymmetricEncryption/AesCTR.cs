@@ -127,11 +127,12 @@ namespace SecureData.Cryptography.SymmetricEncryption
 		}
 
 		/// <summary>
-		/// Zero out IV and key.
+		/// Zero out key, IV and counter.
 		/// </summary>
 		public void Clear()
 		{
 			Native.AES_ClearKeyIV(_handle);
+			Counter = 0;
 		}
 
 		public void CopyTo(AesCtr destination)
@@ -195,43 +196,43 @@ namespace SecureData.Cryptography.SymmetricEncryption
 		}
 		private static class Native
 		{
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			private static extern void AES_CreateHandle(out AesSafeHandle handle);
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			public static extern unsafe void AES_SetIV(AesSafeHandle handle, void* iv);
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			public static extern void AES_DestroyHandle(IntPtr handle);
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			public static extern void AES_ClearKeyIV(AesSafeHandle handle);
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			public static extern void AES_Clone(AesSafeHandle source, AesSafeHandle destination);
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			public static extern void AES_AddIV0(AesSafeHandle handle, ulong value);
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			public static extern void AES_SubtractIV0(AesSafeHandle handle, ulong value);
 
 			#region Default
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			private static extern unsafe void AESDF_SetKey(AesSafeHandle handle, void* key);
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			private static extern unsafe void AESDF_Encrypt(AesSafeHandle handle, void* input, void* output, UInt32 initialCounter, UInt64 size);
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			private static extern unsafe void AESDF_EncryptBlock(AesSafeHandle handle, void* input, void* output, UInt32 initialCounter);
 			#endregion
 			#region TTables
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			private static extern unsafe void AESTT_SetKey(AesSafeHandle handle, void* key);
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			private static extern unsafe void AESTT_Encrypt(AesSafeHandle handle, void* input, void* output, UInt32 initialCounter, UInt64 size);
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			private static extern unsafe void AESTT_EncryptBlock(AesSafeHandle handle, void* input, void* output, UInt32 initialCounter);
 			#endregion
 			#region NI
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			private static extern unsafe void AESNI_SetKey(AesSafeHandle handle, void* key);
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			private static extern unsafe void AESNI_Encrypt(AesSafeHandle handle, void* input, void* output, UInt32 initialCounter, UInt64 size);
-			[DllImport(DllImportManager.DllName)]
+			[DllImport(Library.Crypto)]
 			private static extern unsafe void AESNI_EncryptBlock(AesSafeHandle handle, void* input, void* output, UInt32 initialCounter);
 			#endregion
 

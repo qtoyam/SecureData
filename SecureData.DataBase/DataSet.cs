@@ -1,142 +1,76 @@
-﻿using System;
-using System.Buffers;
-using System.Collections;
-using System.Collections.Generic;
+﻿using System.Collections;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-using SecureData.Cryptography.SymmetricEncryption;
-using SecureData.DataBase.Exceptions;
 using SecureData.DataBase.Models.Abstract;
 
-namespace SecureData.DataBase
+namespace SecureData.DataBase;
+
+internal class DataSet : IEnumerable<Data>
 {
-	internal class DataSet : IEnumerable<Data>
+	private bool _isInited = false;
+
+	private record DataInfo(Data Data, long FilePos);
+
+	private readonly Dictionary<uint, DataInfo> _dataSet = new();
+	private readonly List<Data> _root = new();
+
+	public IReadOnlyList<Data> Root
 	{
-		private const int MinCacheSize = 16 * 1024;
-
-		private readonly Dictionary<uint, DataInfo> _data = new();
-		private readonly LinkedList<DataInfo> _cached = new();
-		private readonly int _maxCacheSize;
-		private int _currentCacheSize = 0;
-
-		public DataSet(int maxCacheSize)
+		get
 		{
-			if (maxCacheSize < MinCacheSize)
-			{
-				maxCacheSize = MinCacheSize;
-			}
-			_maxCacheSize = maxCacheSize;
+			EnsureInited();
+			return _root;
 		}
+	}
 
-		public void Add(Data data, long filePos)
+	public void Add(Data data, long filePos, ReadOnlySpan<byte> dataBytes)
+	{
+		EnsureInited();
+		_dataSet.Add(data.Id, new DataInfo(data, filePos));
+		if (!data.HasParent)
 		{
-			_data.Add(data.Id, new DataInfo(data, filePos));
+			_root.Add(data);
 		}
+	}
+	internal void AddOnInit(Data data, long filePos)
+	{
+		EnsureNotInited();
+		_dataSet.Add(data.Id, new DataInfo(data, filePos));
+	}
 
-		public Data this[uint id]
+	internal void FinishInit()
+	{
+		EnsureNotInited();
+		_root.AddRange(this.Where(x => !x.HasParent));
+		_isInited = true;
+	}
+
+	public Data this[uint id] => _dataSet[id].Data;
+
+	public bool TryGetValue(uint id, [MaybeNullWhen(false)] out Data? data)
+	{
+		EnsureInited();
+		bool res = _dataSet.TryGetValue(id, out var dataInfo);
+		data = dataInfo?.Data;
+		return res;
+	}
+
+	public IEnumerator<Data> GetEnumerator() => _dataSet.Values.Select(x => x.Data).GetEnumerator();
+	IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+	private void EnsureInited()
+	{
+		if (!_isInited)
 		{
-			get => _data[id].Data;
+			throw new InvalidOperationException($"{nameof(DataSet)} is not inited yet.");
 		}
-
-		public bool TryGetValue(uint id, [MaybeNullWhen(false)] out Data? data)
+	}
+	private void EnsureNotInited()
+	{
+		if (_isInited)
 		{
-			bool res = _data.TryGetValue(id, out var dataInfo);
-			data = dataInfo?.Data;
-			return res;
-		}
-
-		public bool TryGetCache(Data data, [MaybeNullWhen(false)] out ReadOnlyMemory<byte>? cache)
-		{
-			var dataInfo = _data[data.Id];
-			if (!dataInfo.IsCached)
-			{
-				cache = null;
-				return false;
-			}
-			cache = dataInfo.GetCache();
-			return true;
-		}
-		public Span<byte> CacheData(Data data)
-		{
-			var dataInfo = _data[data.Id];
-			return dataInfo.CreateCache();
-		}
-
-		public IEnumerator<Data> GetEnumerator() => _data.Values.Select(x => x.Data).GetEnumerator();
-		IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-
-		private void EnsureContains(Data data)
-		{
-			if (!_data.ContainsKey(data.Id))
-			{
-				throw new UnexpectedException("Set does not contain data.");
-			}
-		}
-
-
-		//TODO: cache items while reading first time checking that cache has space
-		private class DataInfo
-		{
-			public Data Data { get; }
-
-
-			
-		}
-		private class DataCache
-		{
-			private byte[]? _arrayPoolBuffer;
-
-			public long FilePos { get; }
-
-			public DataCache(long filePos)
-			{
-				FilePos = filePos;
-			}
-
-			public long GetSensitivePos() => FilePos + Data.SensitiveOffset;
-			public uint GetSensitiveCTR() => AesCtr.ConvertToCTR(GetSensitivePos());
-			public int GetCacheSize() => Data.Size - Data.SensitiveOffset;
-
-			[MemberNotNullWhen(true, nameof(_arrayPoolBuffer))]
-			public bool IsCached => _arrayPoolBuffer is not null;
-
-			public Span<byte> CreateCache()
-			{
-				EnsureNotCached();
-				int cacheSize = GetCacheSize();
-				_arrayPoolBuffer = ArrayPool<byte>.Shared.Rent(cacheSize);
-				return _arrayPoolBuffer.AsSpan(0, cacheSize);
-			}
-			public ReadOnlyMemory<byte> GetCache()
-			{
-				EnsureCached();
-				return _arrayPoolBuffer.AsMemory(0, GetCacheSize());
-			}
-			public void ClearCache()
-			{
-				EnsureCached();
-				ArrayPool<byte>.Shared.Return(_arrayPoolBuffer, false);
-				_arrayPoolBuffer = null;
-			}
-
-			[MemberNotNull(nameof(_arrayPoolBuffer))]
-			private void EnsureCached()
-			{
-				if (!IsCached)
-				{
-					throw new InvalidOperationException("Data not cached.");
-				}
-			}
-			private void EnsureNotCached()
-			{
-				if (IsCached)
-				{
-					throw new InvalidOperationException("Data already cached.");
-				}
-			}
+			throw new InvalidOperationException($"{nameof(DataSet)} is already inited.");
 		}
 	}
 }
+//TODO: cache items while reading first time checking that cache has space

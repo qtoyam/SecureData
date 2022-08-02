@@ -1,7 +1,8 @@
 ﻿namespace SecureData.Cryptography
 {
-	internal static class DllImportManager
+	internal static class Library
 	{
-		internal const string DllName = "crypto";
+		internal const string Crypto = "crypto";
+		internal const string Argon2 = "argon2";
 	}
 }

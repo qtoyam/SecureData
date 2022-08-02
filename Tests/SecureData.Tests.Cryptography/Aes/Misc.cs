@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Reflection;
+using System.Runtime.InteropServices;
 
 namespace SecureData.Tests.Cryptography.Aes
 {
@@ -94,6 +95,24 @@ namespace SecureData.Tests.Cryptography.Aes
 			}
 
 			AssertExt.Equal(exp_data, act_data);
+		}
+
+		[Fact]
+		public void Clear()
+		{
+			using(SecureData.Cryptography.SymmetricEncryption.AesCtr aes = new SecureData.Cryptography.SymmetricEncryption.AesCtr())
+			{
+				aes.Clear();
+				var handle = (SafeHandle)
+					aes.GetType()
+					.GetField("_handle", BindingFlags.Instance | BindingFlags.NonPublic)!
+					.GetValue(aes)!;
+				var ptr = handle.DangerousGetHandle();
+				for (int i = 0; i < 256; i++)
+				{
+					Assert.Equal(0, Marshal.ReadByte(ptr, i));
+				}
+			}
 		}
 	}
 }

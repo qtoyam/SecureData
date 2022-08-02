@@ -48,10 +48,10 @@ public class AccountData : Data
 		_password = null;
 	}
 
-	public override void LoadSensitive(ReadOnlySpan<byte> raw)
+	public override void LoadSensitive(ReadOnlySpan<byte> sensitiveBytes)
 	{
-		_login = BinaryHelper.ReadString(raw.Slice(Layout.LoginOffset, Layout.LoginSize));
-		_password = BinaryHelper.ReadString(raw.Slice(Layout.PasswordOffset, Layout.PasswordSize));
+		_login = BinaryHelper.ReadString(sensitiveBytes.Slice(Layout.LoginOffset - SensitiveOffset, Layout.LoginSize));
+		_password = BinaryHelper.ReadString(sensitiveBytes.Slice(Layout.PasswordOffset - SensitiveOffset, Layout.PasswordSize));
 	}
 
 	protected override void FlushCore(Span<byte> raw)
