@@ -1,4 +1,4 @@
-﻿namespace SecureData.DataBase.Helpers
+﻿namespace SecureData.Storage.Helpers
 {
 	public static class Extensions
 	{

@@ -1,7 +1,7 @@
-﻿using SecureData.DataBase.Helpers;
-using SecureData.DataBase.Models.Abstract;
+﻿using SecureData.Storage.Helpers;
+using SecureData.Storage.Models.Abstract;
 
-namespace SecureData.DataBase.Models;
+namespace SecureData.Storage.Models;
 
 public class AccountData : Data
 {

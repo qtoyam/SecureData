@@ -4,20 +4,19 @@ using System.Linq.Expressions;
 using System.Reflection;
 
 using SecureData.Cryptography.Hash;
-using SecureData.DataBase.Exceptions;
-using SecureData.DataBase.Helpers;
+using SecureData.Storage.Exceptions;
+using SecureData.Storage.Helpers;
 
 //TODO:0 const -> static?
-namespace SecureData.DataBase.Models.Abstract;
+namespace SecureData.Storage.Models.Abstract;
 
 public abstract class Data
 {
 	public const uint NullId = 0U;
 	public const long DeletedFlag = 1U << 31;
-	public const int MinSizeToRead = Layout.DataTypeOffset + Layout.DataTypeSize;
 
 	private const int HashStart = Layout.DataTypeOffset;
-	public const int DividableBy = Cryptography.SymmetricEncryption.AesCtr.BlockSize;
+	public static readonly int DividableBy = Cryptography.SymmetricEncryption.AesCtr.BlockSize;
 
 	private static uint _lastId = NullId;
 	private static uint GetId()
@@ -65,6 +64,7 @@ public abstract class Data
 	}
 	protected const int SizeConst = Layout.DescriptionOffset + Layout.DescriptionSize;
 	protected const long DataTypeConst = DeletedFlag;
+	protected const int SensitiveOffsetConst = SizeConst;
 
 	/// <summary>
 	/// Init data before <see cref="SensitiveOffset"/>.
@@ -171,6 +171,10 @@ public abstract class Data
 		Changes = 0;
 	}
 
+	/// <summary>
+	/// Flushes only derived class data.
+	/// </summary>
+	/// <param name="raw"></param>
 	protected abstract void FlushCore(Span<byte> raw);
 
 	protected static T GetSensitive<T>(ref T? field)
@@ -229,11 +233,11 @@ public abstract class Data
 		}
 	}
 
-	internal readonly ref struct Metadata
+	internal class Metadata
 	{
 		private delegate Data DataCreator(ReadOnlySpan<byte> data);
-		private record DataMetadata(long DataType, int Size, DataCreator Creator);
-		private readonly ReadOnlySpan<DataMetadata> _dataMetadata;
+		private record DataMetadata(long DataType, int Size, int PublicSize, DataCreator Creator);
+		private readonly DataMetadata[] _dataMetadata;
 
 		private DataMetadata this[long dataType]
 		{
@@ -252,7 +256,6 @@ public abstract class Data
 
 		public Metadata()
 		{
-			int value_SizeConst;
 			var type_Data = typeof(Data);
 			List<DataMetadata> metadata = new();
 			ParameterExpression param_Raw = Expression.Parameter(typeof(ReadOnlySpan<byte>));
@@ -267,28 +270,35 @@ public abstract class Data
 					)
 				{
 					//data type
-					var field_DataTypeConst = t.GetField(nameof(DataTypeConst), BindingFlags.NonPublic | BindingFlags.Static)
-						?? throw new NotImplementedException($"Type \"{t.FullName}\", not implemented const field {nameof(DataTypeConst)}.");
-					long value_DataTypeConst = (long)field_DataTypeConst.GetValue(null)!;
-					if (value_DataTypeConst == DeletedFlag)
+					long dataTypeConst = GetConstFieldValue<long>(t, nameof(DataTypeConst));
+					if ((dataTypeConst & DeletedFlag) == DeletedFlag)
 					{
-						throw new NotImplementedException($"Type \"{t.FullName}\", const field {nameof(DataTypeConst)} can not be equals to {nameof(DeletedFlag)}. It is reserved.");
+						throw new UnexpectedException(
+							   $"Type \"{t.FullName}\", {nameof(DataTypeConst)} contains {nameof(DeletedFlag)}.");
 					}
+
 					//size
-					var field_SizeConst = t.GetField(nameof(SizeConst), BindingFlags.NonPublic | BindingFlags.Static)
-						?? throw new NotImplementedException($"Type \"{t.FullName}\", not implemented const field {nameof(SizeConst)}.");
-					value_SizeConst = (int)field_SizeConst.GetValue(null)!;
-					if ((value_SizeConst % DividableBy) != 0)
+					int sizeConst = GetConstFieldValue<int>(t, nameof(SizeConst));
+					if ((sizeConst % DividableBy) != 0)
 					{
-						throw new NotImplementedException($"Type \"{t.FullName}\", const field {nameof(SizeConst)} value not dividable by {nameof(DividableBy)}.");
+						throw new UnexpectedException(
+							   $"Type \"{t.FullName}\", {nameof(SizeConst)} value not dividable by {nameof(DividableBy)}.");
+					}
+
+					//sensitive offset
+					int sensitiveOffsetConst = GetConstFieldValue<int>(t, nameof(SensitiveOffsetConst));
+					if ((sensitiveOffsetConst % DividableBy) != 0)
+					{
+						throw new NotImplementedException(
+							   $"Type \"{t.FullName}\", {nameof(SensitiveOffsetConst)} value not dividable by {nameof(DividableBy)}.");
 					}
 
 					var ctor = t.GetConstructor(BindingFlags.NonPublic | BindingFlags.Instance, params_Ctor)
-						?? throw new NotImplementedException($"Type \"{t.FullName}\", not implemented protected constructor with {nameof(ReadOnlySpan<byte>)} as parameter.");
+						?? throw new UnexpectedException($"Type \"{t.FullName}\", not implemented protected constructor.");
 					var creator = Expression.Lambda<DataCreator>(
 						   Expression.New(ctor, param_Raw), param_Raw
 						   ).Compile();
-					metadata.Add(new(value_DataTypeConst, value_SizeConst, creator));
+					metadata.Add(new(dataTypeConst, sizeConst, sensitiveOffsetConst, creator));
 				}
 			}
 			_dataMetadata = metadata.ToArray();
@@ -304,52 +314,38 @@ public abstract class Data
 					}
 				}
 			}
-
 		}
 
-		/// <summary>
-		/// Try to create initialized <see cref="Data"/> from <paramref name="buffer"/>.
-		/// </summary>
-		/// <param name="readBytes">
-		/// Bytes processed in <paramref name="buffer"/>.
-		/// </param>
-		/// <returns>
-		/// <see langword="true"/> if created, otherwise <see langword="false"/>.
-		/// </returns>
-		public bool TryCreate(ReadOnlySpan<byte> buffer, [NotNullWhen(true)] out Data? data, out int readBytes)
+		public Data? Create(ReadOnlySpan<byte> buffer, Span<byte> tmp, out int readBytes)
 		{
-			Debug.Assert(buffer.Length >= MinSizeToRead);
 			long dataType = BinaryHelper.ReadInt64(buffer.Slice(Layout.DataTypeOffset, Layout.DataTypeSize));
 			bool deleted = (dataType & DeletedFlag) == DeletedFlag;
 			dataType &= ~DeletedFlag; //remove ONLY deleted flag
 			DataMetadata type = this[dataType];
-			if (type.Size > buffer.Length)
+			if(buffer.Length < type.Size)
 			{
-				data = null;
-				readBytes = 0;
-				return false;
+				throw new ArgumentOutOfRangeException(nameof(buffer));
 			}
-			readBytes = type.Size;
-			buffer = buffer.Slice(0, readBytes);
+			buffer = buffer.Slice(0, type.PublicSize);
 			uint id = BinaryHelper.ReadUInt32(buffer.Slice(Layout.IdOffset, Layout.IdSize));
 			if (id > _lastId)
 			{
 				_lastId = id;
 			}
+			readBytes = type.Size;
 			if (deleted)
 			{
-				data = null;
-				return false;
+				return null;
 			}
-			data = type.Creator(buffer);
+			Data data = type.Creator(buffer);
 			data.Id = id;
-			Span<byte> s_actualHash = stackalloc byte[SHA256.HashSize];
+			Span<byte> s_actualHash = tmp.Slice(0, SHA256.HashSize);
 			SHA256.ComputeHash(buffer.Slice(HashStart), s_actualHash);
 			if (!MemoryHelper.Compare(data.Hash.Span, s_actualHash))
 			{
-				throw new DataBaseWrongHashException();
+				throw new DataWrongHashException(data);
 			}
-			return true;
+			return data;
 		}
 
 		public void OrganizeHierarchy(DataSet dataSet)
@@ -369,5 +365,11 @@ public abstract class Data
 			}
 		}
 
+		private static TField GetConstFieldValue<TField>(Type type, string fieldName)
+		{
+			var field = type.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Static)
+						?? throw new UnexpectedException($"Type \"{type.FullName}\", not implemented {fieldName}.");
+			return (TField)field.GetValue(null)!;
+		}
 	}
 }

@@ -2,7 +2,7 @@
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 
-namespace SecureData.DataBase.Helpers
+namespace SecureData.Storage.Helpers
 {
 	public static class MemoryHelper
 	{

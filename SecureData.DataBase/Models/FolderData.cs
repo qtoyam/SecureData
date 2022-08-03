@@ -1,6 +1,6 @@
-﻿using SecureData.DataBase.Models.Abstract;
+﻿using SecureData.Storage.Models.Abstract;
 
-namespace SecureData.DataBase.Models;
+namespace SecureData.Storage.Models;
 
 public class FolderData : Data
 {

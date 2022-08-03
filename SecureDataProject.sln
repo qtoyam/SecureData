@@ -7,16 +7,14 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{27E0707A
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SecureData.Cryptography", "SecureData.Cryptography\SecureData.Cryptography.csproj", "{E070A4DD-93CA-4333-AEEF-C471E7893A36}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SecureData.DataBase", "SecureData.DataBase\SecureData.DataBase.csproj", "{0BD2044E-281D-4A93-A9D3-A81AD0AE3264}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SecureData.Storage", "SecureData.DataBase\SecureData.Storage.csproj", "{0BD2044E-281D-4A93-A9D3-A81AD0AE3264}"
 	ProjectSection(ProjectDependencies) = postProject
 		{E070A4DD-93CA-4333-AEEF-C471E7893A36} = {E070A4DD-93CA-4333-AEEF-C471E7893A36}
 	EndProjectSection
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SecureData.Tests.DataBase", "Tests\SecureData.Tests.DataBase\SecureData.Tests.DataBase.csproj", "{0BA15234-4D01-4C69-9B51-B2E891EBE586}"
-EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SecureData.Tests.Cryptography", "Tests\SecureData.Tests.Cryptography\SecureData.Tests.Cryptography.csproj", "{581EFFB8-4744-4576-9497-663CB3B504CC}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SecureData.Manager", "SecureData.Manager\SecureData.Manager.csproj", "{B21EFC2C-3773-4E04-B1BF-2A8D55B10DD4}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SecureData.Manager", "SecureData.Manager\SecureData.Manager.csproj", "{B21EFC2C-3773-4E04-B1BF-2A8D55B10DD4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -52,18 +50,6 @@ Global
 		{0BD2044E-281D-4A93-A9D3-A81AD0AE3264}.Release|x64.Build.0 = Release|Any CPU
 		{0BD2044E-281D-4A93-A9D3-A81AD0AE3264}.Release|x86.ActiveCfg = Release|Any CPU
 		{0BD2044E-281D-4A93-A9D3-A81AD0AE3264}.Release|x86.Build.0 = Release|Any CPU
-		{0BA15234-4D01-4C69-9B51-B2E891EBE586}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{0BA15234-4D01-4C69-9B51-B2E891EBE586}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{0BA15234-4D01-4C69-9B51-B2E891EBE586}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{0BA15234-4D01-4C69-9B51-B2E891EBE586}.Debug|x64.Build.0 = Debug|Any CPU
-		{0BA15234-4D01-4C69-9B51-B2E891EBE586}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{0BA15234-4D01-4C69-9B51-B2E891EBE586}.Debug|x86.Build.0 = Debug|Any CPU
-		{0BA15234-4D01-4C69-9B51-B2E891EBE586}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{0BA15234-4D01-4C69-9B51-B2E891EBE586}.Release|Any CPU.Build.0 = Release|Any CPU
-		{0BA15234-4D01-4C69-9B51-B2E891EBE586}.Release|x64.ActiveCfg = Release|Any CPU
-		{0BA15234-4D01-4C69-9B51-B2E891EBE586}.Release|x64.Build.0 = Release|Any CPU
-		{0BA15234-4D01-4C69-9B51-B2E891EBE586}.Release|x86.ActiveCfg = Release|Any CPU
-		{0BA15234-4D01-4C69-9B51-B2E891EBE586}.Release|x86.Build.0 = Release|Any CPU
 		{581EFFB8-4744-4576-9497-663CB3B504CC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{581EFFB8-4744-4576-9497-663CB3B504CC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{581EFFB8-4744-4576-9497-663CB3B504CC}.Debug|x64.ActiveCfg = Debug|Any CPU
@@ -93,7 +79,6 @@ Global
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{0BA15234-4D01-4C69-9B51-B2E891EBE586} = {27E0707A-D571-4F9A-B74A-79F3E3DFBFFD}
 		{581EFFB8-4744-4576-9497-663CB3B504CC} = {27E0707A-D571-4F9A-B74A-79F3E3DFBFFD}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution

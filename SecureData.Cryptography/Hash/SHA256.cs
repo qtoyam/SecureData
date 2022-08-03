@@ -103,6 +103,12 @@ namespace SecureData.Cryptography.Hash
 			return new SHA256(newHandle, _isFinal);
 		}
 
+		public void CopyTo(SHA256 destination)
+		{
+			Native.SHA256_Clone(_handle, destination._handle);
+			destination._isFinal = _isFinal;
+		}
+
 		private sealed class SHA256SafeHandle : SafeHandle
 		{
 			public SHA256SafeHandle() : base(IntPtr.Zero, true) { }

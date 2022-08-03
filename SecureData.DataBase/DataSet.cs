@@ -1,9 +1,9 @@
 ﻿using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 
-using SecureData.DataBase.Models.Abstract;
+using SecureData.Storage.Models.Abstract;
 
-namespace SecureData.DataBase;
+namespace SecureData.Storage;
 
 internal class DataSet : IEnumerable<Data>
 {
@@ -23,13 +23,17 @@ internal class DataSet : IEnumerable<Data>
 		}
 	}
 
-	public void Add(Data data, long filePos, ReadOnlySpan<byte> dataBytes)
+	public void Add(Data data, long filePos)
 	{
 		EnsureInited();
 		_dataSet.Add(data.Id, new DataInfo(data, filePos));
 		if (!data.HasParent)
 		{
 			_root.Add(data);
+		}
+		else
+		{
+			data.Parent.Add(data);
 		}
 	}
 	internal void AddOnInit(Data data, long filePos)

@@ -1,4 +1,6 @@
-﻿namespace SecureData.DataBase
+﻿using System.Diagnostics;
+
+namespace SecureData.Storage
 {
 	internal sealed class ObjectPool<T> : IDisposable
 		where T : class
@@ -73,14 +75,8 @@
 
 		public void Dispose()
 		{
-			if(Interlocked.Increment(ref _disposed) != 1)
-			{
-				throw new ObjectDisposedException(nameof(ObjectPool<T>));
-			}
-			if (Interlocked.Add(ref _inUse, 0) != 0)
-			{
-				throw new InvalidOperationException("Not all objects returned.");
-			}
+			Interlocked.Increment(ref _disposed);
+			Debug.Assert(_inUse == 0, "Not all rented returned");
 			var currentNode = _free.First;
 			while(currentNode is not null)
 			{

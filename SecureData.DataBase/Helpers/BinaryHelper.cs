@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace SecureData.DataBase.Helpers
+namespace SecureData.Storage.Helpers
 {
 	public static partial class BinaryHelper
 	{

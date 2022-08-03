@@ -8,6 +8,14 @@
     <StartupObject>SecureData.Manager.App</StartupObject>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <LangVersion>preview</LangVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <LangVersion>preview</LangVersion>
+  </PropertyGroup>
+
   <ItemGroup>
     <ApplicationDefinition Remove="App.xaml" />
 	<Page Include="App.xaml" />
@@ -25,7 +33,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SecureData.DataBase\SecureData.DataBase.csproj" />
+    <ProjectReference Include="..\SecureData.DataBase\SecureData.Storage.csproj" />
   </ItemGroup>
 
   <ItemGroup>

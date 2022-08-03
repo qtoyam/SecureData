@@ -1,7 +1,7 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace SecureData.DataBase.Helpers
+namespace SecureData.Storage.Helpers
 {
 	public static partial class BinaryHelper
 	{

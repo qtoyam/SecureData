@@ -1,4 +1,4 @@
-﻿namespace SecureData.DataBase.Exceptions;
+﻿namespace SecureData.Storage.Exceptions;
 
 public class UnexpectedException : Exception
 {

@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-using SecureData.DataBase;
+using SecureData.Storage;
 using SecureData.Manager.ViewModels;
 using SecureData.Manager.Views;
 
