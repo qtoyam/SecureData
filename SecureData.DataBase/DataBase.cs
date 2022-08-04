@@ -1,20 +1,23 @@
-﻿using System;
-using System.Runtime.CompilerServices;
-using System.Text;
+﻿using System.Runtime.CompilerServices;
 
 using SecureData.Cryptography.Hash;
+using SecureData.Cryptography.SymmetricEncryption;
 using SecureData.Storage.Exceptions;
 using SecureData.Storage.Helpers;
-using SecureData.Storage.Models;
 using SecureData.Storage.Models.Abstract;
-
-using SecureData.Cryptography.SymmetricEncryption;
 
 [assembly: InternalsVisibleTo("SecureData.Tests.Storage")]
 
-//TODO:0 wipe all on crash?
 
+//TODO:9 custom exceptions to hover mouse over method and see what it checks (for example: check for load / mutable etc)
+
+//TODO:9 using(var sha = _shaPool.Rent())
+//TODO:8 create copy of master hash simplify
+//TODO:6 using(var buffer = _buffer.GetBuffer(size)) with buckets? idk
 //TODO:5 cached filestream
+
+//TODO:0 wipe all on crash?
+//TODO:0 read -> readexactly / readatleast(?)
 
 namespace SecureData.Storage;
 
@@ -114,7 +117,7 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 
 			//hash
 			Span<byte> header_enc = _buffer.GetSpan(HLayout.Size - Consts.HashStart); //for encrypted header w/o hash
-			_mAes.Transform(header.Slice(Consts.HashStart), header_enc, 0U);
+			_mAes.Transform(header.Slice(Consts.HashStart), header_enc, GetCTRFromPos(Consts.HashStart));
 			_mHash.Initialize();
 			_mHash.Transform(header_enc);
 			SHA256 sha = _shaPool.Rent();
@@ -171,7 +174,7 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 			_mAes.SetKeyIV(mKey, _salt);
 
 			//decrypt file data
-			_mAes.Transform(file.Slice(Consts.HashStart), 0U);
+			_mAes.Transform(file.Slice(Consts.HashStart), GetCTRFromPos(Consts.HashStart));
 
 			//check hash
 			Span<byte> currentHash = _buffer.GetSpan(SHA256.HashSize);
@@ -212,43 +215,37 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 
 	public void AddData(Data data)
 	{
-		if(_dataSet.Contains(data.Id))
-		{
-			throw new InvalidOperationException("Data already added to database.");
-		}
+		EnsureNewData(data);
 		data.FinishInit();
 		_mFile.Position = _mFile.Length;
 		_dataSet.Add(data, _mFile.Position);
 		try
 		{
-			Span<byte> s_data = _buffer.GetSpan(data.Size);
-			data.Flush(s_data); //flush data to buffer
+			Span<byte> dataBytes = _buffer.GetSpan(data.Size);
+			data.Flush(dataBytes); //flush data to buffer
 
-			_mHash.Transform(s_data); //update master hash
+			_mHash.Transform(dataBytes); //update master hash
 
-			_mAes.Transform(s_data, GetCTRFromPos()); //encrypt
+			_mAes.Transform(dataBytes, GetCTRFromPos(_mFile.Position)); //encrypt
 
-			_mFile.Write(s_data); //write data to file
+			_mFile.Write(dataBytes); //write data to file
 		}
 		finally
 		{
 			_buffer.ReturnAll();
 		}
-		SHA256 sha = _shaPool.Rent();
-		_mHash.CopyTo(sha); //clone master hash
-		sha.Finalize(_hash); //update hash in memory
-		_shaPool.Return(sha);
 
-		WriteCurrentHash(); //update hash in file
+		ProcessMasterHash();
 	}
 	public void LoadSensitive(Data data)
 	{
-		if (!data.HasSensitive)
+		EnsureContains(data);
+		if (!data.HasSensitive || data.IsLoaded)
 		{
 			return;
 		}
 		_mFile.Position = _dataSet.GetFilePos(data) + data.SensitiveOffset;
-		uint ctr = GetCTRFromPos();
+		uint ctr = GetCTRFromPos(_mFile.Position);
 		try
 		{
 			Span<byte> sensitive = _buffer.GetSpan(data.SensitiveSize);
@@ -261,17 +258,53 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 			_buffer.ReturnAll();
 		}
 	}
-	public void ModifyData<TData>(Action<TData> modifyAction)
+	public void ModifyData<TData>(TData data, Action<TData> modifyAction) where TData : Data
 	{
+		EnsureContains(data);
+		data.Unfreeze();
+		modifyAction(data);
+		data.Freeze();
 
+		if (data.HasChanges)
+		{
+			try
+			{
+				Span<byte> dataBytes = _buffer.GetSpan(data.Size);
+				data.Flush(dataBytes); //flush data to buffer
+
+				_mFile.Position = _dataSet.GetFilePos(data); //set pos to write and get ctr from pos
+				_mAes.Transform(dataBytes, GetCTRFromPos(_mFile.Position)); //encrypt
+
+				_mFile.Write(dataBytes); //overwrite data to file
+
+				//update master hash
+				_mFile.Position = Consts.HashStart;
+				uint ctr = GetCTRFromPos(_mFile.Position);
+				Span<byte> file_noHash = _buffer.GetSpan((int)_mFile.Length - Consts.HashStart);
+				_mFile.ReadExactly(file_noHash); //read file w/o hash
+				_mAes.Transform(file_noHash, ctr); //decrypt all
+				_mHash.Initialize(); //reset master hash
+				_mHash.Transform(file_noHash); //hash file w/o hash
+			}
+			finally
+			{
+				_buffer.ReturnAll();
+			}
+			ProcessMasterHash();
+		}
 	}
 
-	private void WriteCurrentHash()
+	private void ProcessMasterHash()
 	{
+		SHA256 sha = _shaPool.Rent();
+		_mHash.CopyTo(sha);
+		sha.Finalize(_hash);
+		_shaPool.Return(sha);
+
 		_mFile.Position = HLayout.HashOffs;
 		_mFile.Write(_hash);
 	}
-	private uint GetCTRFromPos() => AesCtr.ConvertToCTR(_mFile.Position - Consts.HashStart);
+	private uint GetCTRFromPos(long pos) => AesCtr.ConvertToCTR(pos - Consts.HashStart);
 
 	private void FinishInit()
 	{
@@ -284,6 +317,20 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 		if (_isInited)
 		{
 			throw new InvalidOperationException("DB is already initialized.");
+		}
+	}
+	private void EnsureContains(Data data)
+	{
+		if (!_dataSet.Contains(data.Id))
+		{
+			throw new UnexpectedException($"Dataset does not contain data with id {data.Id}");
+		}
+	}
+	private void EnsureNewData(Data data)
+	{
+		if(_dataSet.Contains(data.Id))
+		{
+			throw new UnexpectedException($"Dataset already contains data with id {data.Id}");
 		}
 	}
 

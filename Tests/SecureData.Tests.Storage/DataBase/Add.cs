@@ -70,8 +70,8 @@ namespace SecureData.Tests.Storage.DataBase
 				Assert.Equal(exp_Hash, data.Hash.ToArray());
 				Assert.Equal(exp_DataType, data.DataType);
 
-				Assert.Throws<SensitiveNotLoadedException>(() => data.Login);
-				Assert.Throws<SensitiveNotLoadedException>(() => data.Password);
+				Assert.Throws<DataLoadedException>(() => data.Login);
+				Assert.Throws<DataLoadedException>(() => data.Password);
 
 				db.LoadSensitive(data);
 				Assert.Equal(Login, data.Login);
@@ -108,8 +108,8 @@ namespace SecureData.Tests.Storage.DataBase
 					string istr = data.Description;
 					Assert.Equal(Name + istr, data.Name);
 
-					Assert.Throws<SensitiveNotLoadedException>(() => data.Login);
-					Assert.Throws<SensitiveNotLoadedException>(() => data.Password);
+					Assert.Throws<DataLoadedException>(() => data.Login);
+					Assert.Throws<DataLoadedException>(() => data.Password);
 
 					db.LoadSensitive(data);
 					Assert.Equal(Login + istr, data.Login);
@@ -165,8 +165,8 @@ namespace SecureData.Tests.Storage.DataBase
 				Assert.Equal(data_Hash, data.Hash.ToArray());
 				Assert.Equal(data_DataType, data.DataType);
 
-				Assert.Throws<SensitiveNotLoadedException>(() => data.Login);
-				Assert.Throws<SensitiveNotLoadedException>(() => data.Password);
+				Assert.Throws<DataLoadedException>(() => data.Login);
+				Assert.Throws<DataLoadedException>(() => data.Password);
 
 				db.LoadSensitive(data);
 				Assert.Equal(Login, data.Login);

@@ -15,6 +15,8 @@ public abstract class Data
 	public const uint NullId = 0U;
 	public const long DeletedFlag = 1U << 31;
 
+	public bool IsLoaded { get; private set; }
+
 	private const uint InitedState = uint.MaxValue;
 
 	private const int HashStart = Layout.DataTypeOffset;
@@ -31,13 +33,15 @@ public abstract class Data
 		return id;
 	}
 
-	public bool IsMutable { get; internal set; }
-	private uint _state = NullId;
+	public bool IsMutable { get; private set; }
+	private uint _state;
 
 	/// <summary>
 	/// Count of changes in object since last flush.
 	/// </summary>
-	public int Changes { get; private set; }
+	public uint Changes { get; private set; }
+
+	public bool HasChanges => Changes > 0;
 
 	private static class Layout
 	{
@@ -70,28 +74,33 @@ public abstract class Data
 	protected const int SensitiveOffsetConst = SizeConst;
 
 	/// <summary>
-	/// Init data before <see cref="SensitiveOffset"/>.
+	/// Init non-sensitive data.
 	/// </summary>
 	/// <param name="raw"></param>
 	protected Data(ReadOnlySpan<byte> raw)
 	{
-		IsMutable = false;
 		Debug.Assert(raw.Length >= Size);
-		//skip id
+		//skip id (inited in Create)
 		BinaryHelper.ReadBytes(raw.Slice(Layout.HashOffset, Layout.HashSize), _hash.Span);
 		TimeStamp = BinaryHelper.ReadDateTime(raw.Slice(Layout.TimeStampOffset, Layout.TimeStampSize));
 		_state = BinaryHelper.ReadUInt32(raw.Slice(Layout.ParentIdOffset, Layout.ParentIdSize));
 		_lastEdit = BinaryHelper.ReadDateTime(raw.Slice(Layout.LastEditOffset, Layout.LastEditSize));
 		_name = BinaryHelper.ReadString(raw.Slice(Layout.NameOffset, Layout.NameSize));
 		_description = BinaryHelper.ReadString(raw.Slice(Layout.DescriptionOffset, Layout.DescriptionSize));
+
+		IsLoaded = false;
+		IsMutable = false;
+		//_state = InitedState; dont do it becauze _state will be used to find parent
 	}
 	/// <summary>
 	/// Set defaults.
 	/// </summary>
-	protected Data()
+	public Data()
 	{
-		IsMutable = true;
 		_name = _description = string.Empty;
+		IsLoaded = true;
+		IsMutable = true;
+		_state = NullId;
 	}
 
 	[MemberNotNullWhen(true, nameof(Parent))]
@@ -131,14 +140,25 @@ public abstract class Data
 	}
 	#endregion
 
-	public abstract void ClearSensitive();
-	/// <summary>
-	/// Load sensitive fields/properties from <paramref name="sensitiveBytes"/>.
-	/// </summary>
-	/// <param name="sensitiveBytes">
-	/// Data raw bytes from <see cref="SensitiveOffset"/>.
-	/// </param>
-	public abstract void LoadSensitive(ReadOnlySpan<byte> sensitiveBytes);
+	internal void ClearSensitive()
+	{
+		if (IsLoaded)
+		{
+			ClearSensitiveCore();
+			IsLoaded = false;
+		}
+	}
+	internal void LoadSensitive(ReadOnlySpan<byte> sensitiveBytes)
+	{
+		if (!IsLoaded)
+		{
+			LoadSensitiveCore(sensitiveBytes);
+			IsLoaded = true;
+		}
+	}
+
+	protected abstract void ClearSensitiveCore();
+	protected abstract void LoadSensitiveCore(ReadOnlySpan<byte> sensitiveBytes);
 
 
 	/// <summary>
@@ -150,20 +170,31 @@ public abstract class Data
 	public bool HasSensitive => SensitiveOffset < Size;
 	public int SensitiveSize => Size - SensitiveOffset;
 
-	public void FinishInit()
+	/// <summary>
+	/// Initializes new data instance.
+	/// </summary>
+	internal void FinishInit()
 	{
 		EnsureNotInited();
-		if (Id == NullId)
-		{
-			Id = GetId();
-			TimeStamp = DateTime.Now;
-		}
-		_state = uint.MaxValue;
+		//set constant values
+		Id = GetId();
+		TimeStamp = DateTime.Now;
+		LastEdit = TimeStamp; //created = edited, not constant
+							  //update states
+		_state = InitedState; //new instance is initialized
+		IsMutable = false; //immutable
+		IsLoaded = true; //loaded
 	}
 
 	internal void Flush(Span<byte> raw)
 	{
-		LastEdit = DateTime.Now;
+		if (raw.Length < Size)
+		{
+			throw new ArgumentException("Buffer less than data size.", nameof(raw));
+		}
+		Debug.Assert(HasChanges, "Flush called without changes");
+		EnsureLoaded();
+		EnsureImmutable();
 		BinaryHelper.Write(raw.Slice(Layout.DataTypeOffset, Layout.DataTypeSize), DataType);
 		BinaryHelper.Write(raw.Slice(Layout.IdOffset, Layout.IdSize), Id);
 		BinaryHelper.Write(raw.Slice(Layout.ParentIdOffset, Layout.ParentIdSize), HasParent ? Parent.Id : NullId);
@@ -177,19 +208,33 @@ public abstract class Data
 		Changes = 0;
 	}
 
+	internal void Unfreeze()
+	{
+		EnsureLoaded();
+		EnsureImmutable();
+		IsMutable = true;
+	}
+	internal void Freeze()
+	{
+		EnsureLoaded();
+		EnsureMutable();
+		if (HasChanges)
+		{
+			LastEdit = DateTime.Now;
+		}
+		IsMutable = false;
+	}
+
 	/// <summary>
 	/// Flushes only derived class data.
 	/// </summary>
 	/// <param name="raw"></param>
 	protected abstract void FlushCore(Span<byte> raw);
 
-	protected static T GetSensitive<T>(ref T? field)
+	protected T GetSensitive<T>(ref T? field)
 	{
-		if (field is null)
-		{
-			throw new SensitiveNotLoadedException();
-		}
-		return field;
+		EnsureLoaded();
+		return field ?? throw new UnexpectedException("Data is loaded but sensitive field is null");
 	}
 	/// <summary>
 	/// Use this to set back-field of any raw memory related property. 
@@ -206,10 +251,8 @@ public abstract class Data
 	/// </param>
 	protected void Set<T>(ref T field, T newValue)
 	{
-		if(!IsMutable)
-		{
-			throw new InvalidOperationException("Data is immutable.");
-		}
+		EnsureLoaded();
+		EnsureMutable();
 		if (!Equals(field, newValue))
 		{
 			field = newValue;
@@ -217,10 +260,6 @@ public abstract class Data
 		}
 	}
 
-	/// <summary>
-	/// Ensures no changes in object.
-	/// </summary>
-	/// <exception cref="InvalidOperationException"></exception>
 	protected void EnsureNoChanges()
 	{
 		if (Changes != 0)
@@ -230,9 +269,37 @@ public abstract class Data
 	}
 	protected void EnsureNotInited()
 	{
-		if (_state == InitedState)
+		if (_state == InitedState || Id != NullId)
 		{
 			throw new InvalidOperationException("Object is inited.");
+		}
+	}
+	protected void EnsureMutable()
+	{
+		if (!IsMutable)
+		{
+			throw new InvalidOperationException("Data is immutable");
+		}
+	}
+	protected void EnsureImmutable()
+	{
+		if (IsMutable)
+		{
+			throw new InvalidOperationException("Data is mutable");
+		}
+	}
+	protected void EnsureLoaded()
+	{
+		if (HasSensitive && !IsLoaded)
+		{
+			throw new DataLoadedException(true);
+		}
+	}
+	protected void EnsureUnloaded()
+	{
+		if (HasSensitive && IsLoaded)
+		{
+			throw new DataLoadedException(false);
 		}
 	}
 
@@ -240,16 +307,14 @@ public abstract class Data
 	{
 		foreach (var data in dataSet)
 		{
-			data.EnsureNotInited();
 			uint parentId = data._state;
 			if (parentId != NullId)
 			{
 				FolderData parent = (FolderData?)dataSet[parentId]
-					?? throw new UnexpectedException("Parent mismatch.");
+					?? throw new UnexpectedException("ParentId is not parent.");
 				data._parent = parent;
 				parent.Add(data);
 			}
-			data.FinishInit();
 		}
 	}
 
@@ -342,7 +407,7 @@ public abstract class Data
 			bool deleted = (dataType & DeletedFlag) == DeletedFlag;
 			dataType &= ~DeletedFlag; //remove ONLY deleted flag
 			DataMetadata type = this[dataType];
-			if(buffer.Length < type.Size)
+			if (buffer.Length < type.Size)
 			{
 				throw new ArgumentOutOfRangeException(nameof(buffer));
 			}

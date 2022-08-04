@@ -21,8 +21,8 @@ public class FolderData : Data, IReadOnlyList<Data>
 	public override int SensitiveOffset => SensitiveOffsetConst;
 
 
-	public override void ClearSensitive() { }
-	public override void LoadSensitive(ReadOnlySpan<byte> sensitiveBytes) { }
+	protected override void ClearSensitiveCore() { }
+	protected override void LoadSensitiveCore(ReadOnlySpan<byte> sensitiveBytes) => throw new NotSupportedException("Folder does not have sensitive data.");
 	protected override void FlushCore(Span<byte> raw) { }
 
 	internal void Add(Data data)

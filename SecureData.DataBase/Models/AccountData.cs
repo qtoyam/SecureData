@@ -44,13 +44,12 @@ public class AccountData : Data
 	public override int Size => SizeConst;
 	public override int SensitiveOffset => SensitiveOffsetConst;
 
-	public override void ClearSensitive()
+	protected override void ClearSensitiveCore()
 	{
-		_login = null;
-		_password = null;
+		_login = _password = null;
 	}
 
-	public override void LoadSensitive(ReadOnlySpan<byte> sensitiveBytes)
+	protected override void LoadSensitiveCore(ReadOnlySpan<byte> sensitiveBytes)
 	{
 		_login = BinaryHelper.ReadString(sensitiveBytes.Slice(Layout.LoginOffset - SensitiveOffset, Layout.LoginSize));
 		_password = BinaryHelper.ReadString(sensitiveBytes.Slice(Layout.PasswordOffset - SensitiveOffset, Layout.PasswordSize));

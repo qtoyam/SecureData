@@ -6,6 +6,7 @@ using DB = SecureData.Storage.DataBase;
 
 namespace SecureData.Tests.Storage.DataBase
 {
+	//TODO:9 name, descr etc pseudorandom string
 	public abstract class DataBaseTest : IDisposable
 	{
 		public const string DBLogin = "my login hihia@#!()@#()c";
