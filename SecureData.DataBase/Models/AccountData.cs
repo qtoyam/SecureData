@@ -15,6 +15,8 @@ public class AccountData : Data
 	}
 	protected new const int SizeConst = Layout.PasswordOffset + Layout.PasswordSize;
 	protected new const long DataTypeConst = 1U;
+	protected new const int SensitiveOffsetConst = Layout.LoginOffset;
+
 	#region DB
 	#region Private write-access
 	private string? _login;
@@ -40,7 +42,7 @@ public class AccountData : Data
 	}
 
 	public override int Size => SizeConst;
-	public override int SensitiveOffset => Layout.LoginOffset;
+	public override int SensitiveOffset => SensitiveOffsetConst;
 
 	public override void ClearSensitive()
 	{

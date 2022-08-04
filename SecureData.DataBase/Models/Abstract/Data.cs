@@ -15,6 +15,8 @@ public abstract class Data
 	public const uint NullId = 0U;
 	public const long DeletedFlag = 1U << 31;
 
+	private const uint InitedState = uint.MaxValue;
+
 	private const int HashStart = Layout.DataTypeOffset;
 	public static readonly int DividableBy = Cryptography.SymmetricEncryption.AesCtr.BlockSize;
 
@@ -29,6 +31,7 @@ public abstract class Data
 		return id;
 	}
 
+	public bool IsMutable { get; internal set; }
 	private uint _state = NullId;
 
 	/// <summary>
@@ -72,7 +75,8 @@ public abstract class Data
 	/// <param name="raw"></param>
 	protected Data(ReadOnlySpan<byte> raw)
 	{
-		Debug.Assert(raw.Length >= PublicSize);
+		IsMutable = false;
+		Debug.Assert(raw.Length >= Size);
 		//skip id
 		BinaryHelper.ReadBytes(raw.Slice(Layout.HashOffset, Layout.HashSize), _hash.Span);
 		TimeStamp = BinaryHelper.ReadDateTime(raw.Slice(Layout.TimeStampOffset, Layout.TimeStampSize));
@@ -86,6 +90,7 @@ public abstract class Data
 	/// </summary>
 	protected Data()
 	{
+		IsMutable = true;
 		_name = _description = string.Empty;
 	}
 
@@ -140,9 +145,10 @@ public abstract class Data
 	/// Total size.
 	/// </summary>
 	public abstract int Size { get; }
-	public abstract int SensitiveOffset { get; }
+	public virtual int SensitiveOffset => Size;
 
-	internal int PublicSize => SensitiveOffset;
+	public bool HasSensitive => SensitiveOffset < Size;
+	public int SensitiveSize => Size - SensitiveOffset;
 
 	public void FinishInit()
 	{
@@ -181,7 +187,7 @@ public abstract class Data
 	{
 		if (field is null)
 		{
-			throw new InvalidOperationException("Sensitive data is not loaded.");
+			throw new SensitiveNotLoadedException();
 		}
 		return field;
 	}
@@ -200,6 +206,10 @@ public abstract class Data
 	/// </param>
 	protected void Set<T>(ref T field, T newValue)
 	{
+		if(!IsMutable)
+		{
+			throw new InvalidOperationException("Data is immutable.");
+		}
 		if (!Equals(field, newValue))
 		{
 			field = newValue;
@@ -218,18 +228,28 @@ public abstract class Data
 			throw new InvalidOperationException("Object has changes.");
 		}
 	}
-	protected void EnsureInited()
-	{
-		if (_state != uint.MaxValue)
-		{
-			throw new InvalidOperationException("Object is not inited.");
-		}
-	}
 	protected void EnsureNotInited()
 	{
-		if (_state == uint.MaxValue)
+		if (_state == InitedState)
 		{
 			throw new InvalidOperationException("Object is inited.");
+		}
+	}
+
+	internal static void OrganizeHierarchy(DataSet dataSet)
+	{
+		foreach (var data in dataSet)
+		{
+			data.EnsureNotInited();
+			uint parentId = data._state;
+			if (parentId != NullId)
+			{
+				FolderData parent = (FolderData?)dataSet[parentId]
+					?? throw new UnexpectedException("Parent mismatch.");
+				data._parent = parent;
+				parent.Add(data);
+			}
+			data.FinishInit();
 		}
 	}
 
@@ -316,7 +336,7 @@ public abstract class Data
 			}
 		}
 
-		public Data? Create(ReadOnlySpan<byte> buffer, Span<byte> tmp, out int readBytes)
+		public Data? Create(ReadOnlySpan<byte> buffer, Span<byte> tmpHash, out int readBytes)
 		{
 			long dataType = BinaryHelper.ReadInt64(buffer.Slice(Layout.DataTypeOffset, Layout.DataTypeSize));
 			bool deleted = (dataType & DeletedFlag) == DeletedFlag;
@@ -326,7 +346,7 @@ public abstract class Data
 			{
 				throw new ArgumentOutOfRangeException(nameof(buffer));
 			}
-			buffer = buffer.Slice(0, type.PublicSize);
+			buffer = buffer.Slice(0, type.Size);
 			uint id = BinaryHelper.ReadUInt32(buffer.Slice(Layout.IdOffset, Layout.IdSize));
 			if (id > _lastId)
 			{
@@ -339,30 +359,13 @@ public abstract class Data
 			}
 			Data data = type.Creator(buffer);
 			data.Id = id;
-			Span<byte> s_actualHash = tmp.Slice(0, SHA256.HashSize);
+			Span<byte> s_actualHash = tmpHash.Slice(0, SHA256.HashSize);
 			SHA256.ComputeHash(buffer.Slice(HashStart), s_actualHash);
 			if (!MemoryHelper.Compare(data.Hash.Span, s_actualHash))
 			{
 				throw new DataWrongHashException(data);
 			}
 			return data;
-		}
-
-		public void OrganizeHierarchy(DataSet dataSet)
-		{
-			foreach (var data in dataSet)
-			{
-				data.EnsureNotInited();
-				uint parentId = data._state;
-				if (parentId != NullId)
-				{
-					FolderData parent = (FolderData?)dataSet[parentId]
-						?? throw new UnexpectedException("Parent mismatch.");
-					data._parent = parent;
-					parent.Add(data);
-				}
-				data.FinishInit();
-			}
 		}
 
 		private static TField GetConstFieldValue<TField>(Type type, string fieldName)

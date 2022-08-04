@@ -45,11 +45,14 @@ internal class DataSet : IEnumerable<Data>
 	internal void FinishInit()
 	{
 		EnsureNotInited();
+		Data.OrganizeHierarchy(this);
 		_root.AddRange(this.Where(x => !x.HasParent));
 		_isInited = true;
 	}
 
 	public Data this[uint id] => _dataSet[id].Data;
+
+	public bool Contains(uint id) => _dataSet.ContainsKey(id);
 
 	public bool TryGetValue(uint id, [MaybeNullWhen(false)] out Data? data)
 	{
@@ -58,6 +61,8 @@ internal class DataSet : IEnumerable<Data>
 		data = dataInfo?.Data;
 		return res;
 	}
+
+	public long GetFilePos(Data data) => _dataSet[data.Id].FilePos;
 
 	public IEnumerator<Data> GetEnumerator() => _dataSet.Values.Select(x => x.Data).GetEnumerator();
 	IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
