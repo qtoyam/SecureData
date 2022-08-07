@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using System.Diagnostics.CodeAnalysis;
 
+using SecureData.Storage.Models;
 using SecureData.Storage.Models.Abstract;
 
 namespace SecureData.Storage;
@@ -40,6 +41,33 @@ internal class DataSet : IEnumerable<Data>
 	{
 		EnsureNotInited();
 		_dataSet.Add(data.Id, new DataInfo(data, filePos));
+	}
+
+	public void Remove(Data data)
+	{
+		EnsureInited();
+
+		RemoveRec(data);
+		if (data.HasParent)
+		{
+			data.Parent.Remove(data);
+		}
+		else
+		{
+			_root.Remove(data);
+		}
+
+		void RemoveRec(Data d)
+		{
+			if(d is FolderData fd)
+			{
+				foreach(var cd in fd)
+				{
+					RemoveRec(cd);
+				}
+			}
+			_dataSet.Remove(d.Id);
+		}
 	}
 
 	internal void FinishInit()

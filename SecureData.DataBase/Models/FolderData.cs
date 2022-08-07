@@ -34,4 +34,6 @@ public class FolderData : Data, IReadOnlyList<Data>
 	public int Count => _childs.Count;
 	public IEnumerator<Data> GetEnumerator() => _childs.GetEnumerator();
 	IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+	internal void Remove(Data data) => _childs.Remove(data);
 }

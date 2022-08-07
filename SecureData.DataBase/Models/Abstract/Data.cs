@@ -13,7 +13,7 @@ namespace SecureData.Storage.Models.Abstract;
 public abstract class Data
 {
 	public const uint NullId = 0U;
-	public const long DeletedFlag = 1U << 31;
+	public const long DeletedFlag = 1U << 63;
 
 	public bool IsLoaded { get; private set; }
 
@@ -155,6 +155,12 @@ public abstract class Data
 			LoadSensitiveCore(sensitiveBytes);
 			IsLoaded = true;
 		}
+	}
+
+	internal void Delete(Span<byte> dataBytes_zero)
+	{
+		BinaryHelper.Write(dataBytes_zero.Slice(Layout.DataTypeOffset, Layout.DataTypeSize),
+			DataType | DeletedFlag);
 	}
 
 	protected abstract void ClearSensitiveCore();

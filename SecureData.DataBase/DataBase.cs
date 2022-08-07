@@ -4,6 +4,7 @@ using SecureData.Cryptography.Hash;
 using SecureData.Cryptography.SymmetricEncryption;
 using SecureData.Storage.Exceptions;
 using SecureData.Storage.Helpers;
+using SecureData.Storage.Models;
 using SecureData.Storage.Models.Abstract;
 using SecureData.Storage.Services;
 
@@ -44,7 +45,6 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 	internal static class Consts
 	{
 		public const uint Version = 1;
-		//should be greater than header and RNG size, and max IData size
 		public const int InitBufferSize = 128 * 1024;
 
 		public const int MinFileSize = HLayout.Size;
@@ -276,17 +276,57 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 			}
 
 			//update master hash
-			_mFile.Position = Consts.HashStart;
-			uint ctr = GetCTRFromPos(_mFile.Position);
-			using (var rented_file_noHash = _buffer.Rent((int)(_mFile.Length - Consts.HashStart)))
-			{
-				Span<byte> file_noHash = rented_file_noHash.Span;
-				_mFile.ReadExactly(file_noHash); //read file w/o hash
-				_mAes.Transform(file_noHash, ctr); //decrypt all
-				_mHash.Initialize(); //reset master hash
-				_mHash.Transform(file_noHash); //hash file w/o hash
-			}
+			FullRecomputeMasterHash();
 			ProcessMasterHash();
+		}
+	}
+	public void DeleteData(Data data)
+	{
+		EnsureContains(data);
+
+		//remove from file
+		EraseFromFileRec(data);
+
+		//update master hash
+		FullRecomputeMasterHash();
+		ProcessMasterHash();
+
+		//remove from memory
+		_dataSet.Remove(data);
+
+		void EraseFromFileRec(Data d)
+		{
+			if(d is FolderData fd)
+			{
+				foreach(var cd in fd)
+				{
+					EraseFromFileRec(cd);
+				}
+			}
+			d.ClearSensitive();
+			_mFile.Position = _dataSet.GetFilePos(d);
+			uint ctr = GetCTRFromPos(_mFile.Position);
+			using(var rented_dataBytes = _buffer.Rent(d.Size))
+			{
+				Span<byte> dataBytes = rented_dataBytes.Span;
+				d.Delete(dataBytes);
+				_mAes.Transform(dataBytes, ctr);
+				_mFile.Write(dataBytes);
+			}
+		}
+	}
+
+	private void FullRecomputeMasterHash()
+	{
+		_mFile.Position = Consts.HashStart;
+		uint ctr = GetCTRFromPos(_mFile.Position);
+		using (var rented_file_noHash = _buffer.Rent((int)(_mFile.Length - Consts.HashStart)))
+		{
+			Span<byte> file_noHash = rented_file_noHash.Span;
+			_mFile.ReadExactly(file_noHash); //read file w/o hash
+			_mAes.Transform(file_noHash, ctr); //decrypt all
+			_mHash.Initialize(); //reset master hash
+			_mHash.Transform(file_noHash); //hash file w/o hash
 		}
 	}
 
@@ -302,7 +342,7 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 		_mFile.Position = HLayout.HashOffs;
 		_mFile.Write(_hash);
 	}
-	private uint GetCTRFromPos(long pos) => AesCtr.ConvertToCTR(pos - Consts.HashStart);
+	private static uint GetCTRFromPos(long pos) => AesCtr.ConvertToCTR(pos - Consts.HashStart);
 
 	private void FinishInit()
 	{
