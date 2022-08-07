@@ -69,7 +69,7 @@ public class FileHandler : IDisposable
 		return path;
 	}
 
-	public void Dispose()
+	void IDisposable.Dispose()
 	{
 		foreach(var file in _files)
 		{
@@ -78,5 +78,6 @@ public class FileHandler : IDisposable
 				File.Delete(file);
 			}
 		}
+		GC.SuppressFinalize(this);
 	}
 }

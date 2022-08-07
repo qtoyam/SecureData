@@ -82,4 +82,3 @@ internal class DataSet : IEnumerable<Data>
 		}
 	}
 }
-//TODO: cache items while reading first time checking that cache has space

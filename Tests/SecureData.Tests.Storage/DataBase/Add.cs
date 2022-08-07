@@ -187,7 +187,7 @@ namespace SecureData.Tests.Storage.DataBase
 					Password = Pass
 				};
 				db.AddData(data);
-				Assert.Throws<InvalidOperationException>(
+				Assert.Throws<UnexpectedException>(
 					() => db.AddData(data));
 			}
 		}

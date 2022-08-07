@@ -27,7 +27,7 @@ namespace SecureData.Storage.Helpers
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static void ZeroOut(Span<byte> data)
+		public static void Wipe(Span<byte> data)
 		{
 			CryptographicOperations.ZeroMemory(data);
 		}

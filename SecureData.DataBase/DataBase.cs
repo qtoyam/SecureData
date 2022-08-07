@@ -5,19 +5,16 @@ using SecureData.Cryptography.SymmetricEncryption;
 using SecureData.Storage.Exceptions;
 using SecureData.Storage.Helpers;
 using SecureData.Storage.Models.Abstract;
+using SecureData.Storage.Services;
 
 [assembly: InternalsVisibleTo("SecureData.Tests.Storage")]
 
 
 //TODO:9 custom exceptions to hover mouse over method and see what it checks (for example: check for load / mutable etc)
 
-//TODO:9 using(var sha = _shaPool.Rent())
-//TODO:8 create copy of master hash simplify
-//TODO:6 using(var buffer = _buffer.GetBuffer(size)) with buckets? idk
 //TODO:5 cached filestream
 
 //TODO:0 wipe all on crash?
-//TODO:0 read -> readexactly / readatleast(?)
 
 namespace SecureData.Storage;
 
@@ -60,7 +57,7 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 
 	private bool _isInited = false;
 
-	private readonly Buffer _buffer = new(Consts.InitBufferSize);
+	private readonly Services.Buffer _buffer = new(Consts.InitBufferSize);
 
 	private readonly AesCtr _mAes = new();
 	private readonly FileStream _mFile;
@@ -74,7 +71,7 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 	public IReadOnlyList<Data> Root => _dataSet.Root;
 
 	public string Login { get; private set; } = string.Empty;
-	public uint Version => Consts.Version;
+	public static uint Version => Consts.Version;
 
 	public DataBase(string path)
 	{
@@ -96,19 +93,22 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 		{
 			throw new InvalidOperationException("File not empty.");
 		}
-		try
+
+		//init data
+		MemoryHelper.RNG(_salt);
+		Login = login;
+
+		//hash password
+		using (var rented_mKey = _buffer.Rent(AesCtr.KeySize))
 		{
-			Span<byte> header = _buffer.GetSpan(HLayout.Size);
-
-			//init data
-			MemoryHelper.RNG(_salt);
-			Login = login;
-
-			//hash password
-			Span<byte> mKey = _buffer.GetSpan(AesCtr.KeySize);
+			Span<byte> mKey = rented_mKey.Span;
 			Argon2d.ComputeHash(passwordHashOptions, MemoryHelper.AsBytes(password.AsSpan()), _salt, mKey);
 			_mAes.SetKeyIV(mKey, _salt);
+		}
 
+		using (var rented_header = _buffer.Rent(HLayout.Size))
+		{
+			Span<byte> header = rented_header.Span;
 			//write data to header buffer
 			passwordHashOptions.Serialize(header.Slice(HLayout.ArgonParamsOffs, HLayout.ArgonParamsSize));
 			BinaryHelper.Write(header.Slice(HLayout.VersionOffs, HLayout.VersionSize), Version);
@@ -116,27 +116,28 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 			BinaryHelper.WriteStringWithRNG(header.Slice(HLayout.LoginOffs, HLayout.LoginSize), Login);
 
 			//hash
-			Span<byte> header_enc = _buffer.GetSpan(HLayout.Size - Consts.HashStart); //for encrypted header w/o hash
-			_mAes.Transform(header.Slice(Consts.HashStart), header_enc, GetCTRFromPos(Consts.HashStart));
-			_mHash.Initialize();
-			_mHash.Transform(header_enc);
-			SHA256 sha = _shaPool.Rent();
-			_mHash.CopyTo(sha);
-			sha.Finalize(_hash);
-			_shaPool.Return(sha);
+			using (var rented_header_enc = _buffer.Rent(HLayout.Size - Consts.HashStart))
+			{
+				Span<byte> header_enc = rented_header_enc.Span; //for encrypted header w/o hash
+				_mAes.Transform(header.Slice(Consts.HashStart), header_enc, GetCTRFromPos(Consts.HashStart));
+				_mHash.Initialize();
+				_mHash.Transform(header_enc);
+			}
+			using (var rented = _shaPool.Rent())
+			{
+				SHA256 sha = rented.Value;
+				_mHash.CopyTo(sha);
+				sha.Finalize(_hash);
+			}
 
 			//write hash to header
 			BinaryHelper.Write(header.Slice(HLayout.HashOffs, HLayout.HashSize), _hash);
 
 			//write header to file
 			_mFile.Write(header);
+		}
 
-			FinishInit();
-		}
-		finally
-		{
-			_buffer.ReturnAll();
-		}
+		FinishInit();
 	}
 	public bool TryInit(string password)
 	{
@@ -146,13 +147,13 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 		{
 			throw DataBaseCorruptedException.WrongDBSize();
 		}
-		try
+		_mFile.Position = 0;
+		using (var rented_file = _buffer.Rent((int)fileLength))
 		{
-			Span<byte> file = _buffer.GetSpan((int)fileLength);
+			Span<byte> file = rented_file.Span;
 
 			//read all file
-			_mFile.Position = 0;
-			_mFile.Read(file);
+			_mFile.ReadExactly(file);
 
 			//process header if not done yet
 			if (Login == string.Empty)
@@ -168,49 +169,53 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 			}
 
 			//init master aes
-			Span<byte> mKey = _buffer.GetSpan(AesCtr.KeySize);
-			Argon2dOptions argonOptions = new(file.Slice(HLayout.ArgonParamsOffs, HLayout.ArgonParamsSize));
-			Argon2d.ComputeHash(argonOptions, MemoryHelper.AsBytes(password.AsSpan()), _salt, mKey);
-			_mAes.SetKeyIV(mKey, _salt);
+			using (var rented_mKey = _buffer.Rent(AesCtr.KeySize))
+			{
+				Span<byte> mKey = rented_mKey.Span;
+				Argon2dOptions argonOptions = new(file.Slice(HLayout.ArgonParamsOffs, HLayout.ArgonParamsSize));
+				Argon2d.ComputeHash(argonOptions, MemoryHelper.AsBytes(password.AsSpan()), _salt, mKey);
+				_mAes.SetKeyIV(mKey, _salt);
+			}
 
 			//decrypt file data
 			_mAes.Transform(file.Slice(Consts.HashStart), GetCTRFromPos(Consts.HashStart));
 
 			//check hash
-			Span<byte> currentHash = _buffer.GetSpan(SHA256.HashSize);
-			_mHash.Initialize();
-			_mHash.Transform(file.Slice(Consts.HashStart));
-			SHA256 sha = _shaPool.Rent();
-			_mHash.CopyTo(sha);
-			sha.Finalize(currentHash);
-			_shaPool.Return(sha);
-			if (!MemoryHelper.Compare(_hash, currentHash))
+			using (var rented_currentHash = _buffer.Rent(SHA256.HashSize))
 			{
-				return false;
-			}
-
-			//read items
-			Data.Metadata metadata = new();
-			int filePos = Consts.DataOffs;
-			ReadOnlySpan<byte> s_working = file.Slice(filePos);
-			while (s_working.Length > 0)
-			{
-				Data? data = metadata.Create(s_working, currentHash, out int readBytes);
-				if (data is not null)
+				Span<byte> currentHash = rented_currentHash.Span;
+				_mHash.Initialize();
+				_mHash.Transform(file.Slice(Consts.HashStart));
+				using (var rented = _shaPool.Rent())
 				{
-					_dataSet.AddOnInit(data, filePos);
+					SHA256 sha = rented.Value;
+					_mHash.CopyTo(sha);
+					sha.Finalize(currentHash);
 				}
-				s_working = s_working.Slice(readBytes);
-				filePos += readBytes;
-			}
+				if (!MemoryHelper.Compare(_hash, currentHash))
+				{
+					return false;
+				}
 
-			FinishInit();
-			return true;
+				//read items
+				Data.Metadata metadata = new();
+				int filePos = Consts.DataOffs;
+				ReadOnlySpan<byte> s_working = file.Slice(filePos);
+				while (s_working.Length > 0)
+				{
+					Data? data = metadata.Create(s_working, currentHash, out int readBytes);
+					if (data is not null)
+					{
+						_dataSet.AddOnInit(data, filePos);
+					}
+					s_working = s_working.Slice(readBytes);
+					filePos += readBytes;
+				}
+			}
 		}
-		finally
-		{
-			_buffer.ReturnAll();
-		}
+
+		FinishInit();
+		return true;
 	}
 
 	public void AddData(Data data)
@@ -219,9 +224,9 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 		data.FinishInit();
 		_mFile.Position = _mFile.Length;
 		_dataSet.Add(data, _mFile.Position);
-		try
+		using (var rented_dataBytes = _buffer.Rent(data.Size))
 		{
-			Span<byte> dataBytes = _buffer.GetSpan(data.Size);
+			Span<byte> dataBytes = rented_dataBytes.Span;
 			data.Flush(dataBytes); //flush data to buffer
 
 			_mHash.Transform(dataBytes); //update master hash
@@ -229,10 +234,6 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 			_mAes.Transform(dataBytes, GetCTRFromPos(_mFile.Position)); //encrypt
 
 			_mFile.Write(dataBytes); //write data to file
-		}
-		finally
-		{
-			_buffer.ReturnAll();
 		}
 
 		ProcessMasterHash();
@@ -246,16 +247,12 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 		}
 		_mFile.Position = _dataSet.GetFilePos(data) + data.SensitiveOffset;
 		uint ctr = GetCTRFromPos(_mFile.Position);
-		try
+		using (var rented_sensitiveBytes = _buffer.Rent(data.SensitiveSize))
 		{
-			Span<byte> sensitive = _buffer.GetSpan(data.SensitiveSize);
-			_mFile.ReadExactly(sensitive);
-			_mAes.Transform(sensitive, ctr);
-			data.LoadSensitive(sensitive);
-		}
-		finally
-		{
-			_buffer.ReturnAll();
+			Span<byte> sensitiveBytes = rented_sensitiveBytes.Span;
+			_mFile.ReadExactly(sensitiveBytes);
+			_mAes.Transform(sensitiveBytes, ctr);
+			data.LoadSensitive(sensitiveBytes);
 		}
 	}
 	public void ModifyData<TData>(TData data, Action<TData> modifyAction) where TData : Data
@@ -267,28 +264,27 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 
 		if (data.HasChanges)
 		{
-			try
+			using (var rented_dataBytes = _buffer.Rent(data.Size))
 			{
-				Span<byte> dataBytes = _buffer.GetSpan(data.Size);
+				Span<byte> dataBytes = rented_dataBytes.Span;
 				data.Flush(dataBytes); //flush data to buffer
 
 				_mFile.Position = _dataSet.GetFilePos(data); //set pos to write and get ctr from pos
 				_mAes.Transform(dataBytes, GetCTRFromPos(_mFile.Position)); //encrypt
 
 				_mFile.Write(dataBytes); //overwrite data to file
+			}
 
-				//update master hash
-				_mFile.Position = Consts.HashStart;
-				uint ctr = GetCTRFromPos(_mFile.Position);
-				Span<byte> file_noHash = _buffer.GetSpan((int)_mFile.Length - Consts.HashStart);
+			//update master hash
+			_mFile.Position = Consts.HashStart;
+			uint ctr = GetCTRFromPos(_mFile.Position);
+			using (var rented_file_noHash = _buffer.Rent((int)(_mFile.Length - Consts.HashStart)))
+			{
+				Span<byte> file_noHash = rented_file_noHash.Span;
 				_mFile.ReadExactly(file_noHash); //read file w/o hash
 				_mAes.Transform(file_noHash, ctr); //decrypt all
 				_mHash.Initialize(); //reset master hash
 				_mHash.Transform(file_noHash); //hash file w/o hash
-			}
-			finally
-			{
-				_buffer.ReturnAll();
 			}
 			ProcessMasterHash();
 		}
@@ -296,10 +292,12 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 
 	private void ProcessMasterHash()
 	{
-		SHA256 sha = _shaPool.Rent();
-		_mHash.CopyTo(sha);
-		sha.Finalize(_hash);
-		_shaPool.Return(sha);
+		using (var rented = _shaPool.Rent())
+		{
+			SHA256 sha = rented.Value;
+			_mHash.CopyTo(sha);
+			sha.Finalize(_hash);
+		}
 
 		_mFile.Position = HLayout.HashOffs;
 		_mFile.Write(_hash);
@@ -328,7 +326,7 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 	}
 	private void EnsureNewData(Data data)
 	{
-		if(_dataSet.Contains(data.Id))
+		if (_dataSet.Contains(data.Id))
 		{
 			throw new UnexpectedException($"Dataset already contains data with id {data.Id}");
 		}

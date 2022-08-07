@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
 
-namespace SecureData.Storage
+namespace SecureData.Storage.Services
 {
 	internal sealed class ObjectPool<T> : IDisposable
 		where T : class
@@ -25,7 +25,7 @@ namespace SecureData.Storage
 			_free = new LinkedList<T>();
 		}
 
-		public T Rent()
+		public Rented Rent()
 		{
 			EnsureNotDisposed();
 			T? rented = null;
@@ -39,16 +39,14 @@ namespace SecureData.Storage
 			}
 			rented ??= _create();
 			Interlocked.Increment(ref _inUse);
-			return rented;
+			return new Rented(this, rented);
 		}
 
-		public void Return(T value)
+		private void Return(T value)
 		{
 			EnsureNotDisposed();
 			if (Interlocked.Decrement(ref _inUse) < 0)
-			{
 				throw new InvalidOperationException("Returned more objects than rented.");
-			}
 			_clear(value);
 			bool addedToPool = false;
 			lock (_free)
@@ -59,18 +57,14 @@ namespace SecureData.Storage
 					addedToPool = true;
 				}
 			}
-			if(!addedToPool)
-			{
+			if (!addedToPool)
 				_dispose(value);
-			}
 		}
 
 		private void EnsureNotDisposed()
 		{
 			if (Interlocked.Add(ref _disposed, 0) != 0)
-			{
 				throw new ObjectDisposedException(nameof(ObjectPool<T>));
-			}
 		}
 
 		public void Dispose()
@@ -78,11 +72,26 @@ namespace SecureData.Storage
 			Interlocked.Increment(ref _disposed);
 			Debug.Assert(_inUse == 0, "Not all rented returned");
 			var currentNode = _free.First;
-			while(currentNode is not null)
+			while (currentNode is not null)
 			{
 				_dispose(currentNode.Value);
 				currentNode = currentNode.Next;
 			}
+		}
+
+		internal sealed class Rented : IDisposable
+		{
+			private readonly ObjectPool<T> _pool;
+
+			public T Value { get; }
+
+			internal Rented(ObjectPool<T> pool, T value)
+			{
+				_pool = pool;
+				Value = value;
+			}
+
+			void IDisposable.Dispose() => _pool.Return(Value);
 		}
 	}
 }
