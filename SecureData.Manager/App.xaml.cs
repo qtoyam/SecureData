@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using SecureData.Storage;
 using SecureData.Manager.ViewModels;
 using SecureData.Manager.Views;
+using SecureData.Manager.Services;
 
 namespace SecureData.Manager
 {
@@ -27,8 +28,18 @@ namespace SecureData.Manager
 					ShutdownMode = ShutdownMode.OnLastWindowClose
 				};
 				app.InitializeComponent();
-				LoginWindow loginWindow = new();
-				loginWindow.ShowDialog();
+				var db = host.Services.GetRequiredService<DataBase>();
+				if (!db.IsCreated)
+				{
+					CreateDBWindow createDBWindow = new CreateDBWindow();
+					createDBWindow.ShowDialog();
+					var argonOptions = createDBWindow.VM.ArgonOptions;
+					if (argonOptions is null)
+					{
+						return;
+					}
+					db.Create("default", createDBWindow.VM.Password, argonOptions);
+				}
 				app.MainWindow = host.Services.GetRequiredService<AppWindow>();
 				app.MainWindow.Visibility = Visibility.Visible;
 				app.Run();
@@ -68,8 +79,19 @@ namespace SecureData.Manager
 			.ConfigureServices((context, services) =>
 			{
 				//services, hosted services, configs
+				services.AddSingleton<DataBase>((_) => new DataBase(Paths.Database));
+				services.AddSingleton<Notifier>((_) =>
+				{
+					//TODO: owner
+					return new Notifier(msg => MessageBox.Show(Current.MainWindow, msg), Current.Shutdown);
+				});
+				services.AddSingleton<ParallelRunner>();
+
 				services.AddSingleton<AppWindow>();
 				services.AddSingleton<AppWindowVM>();
+
+				services.AddSingleton<AuthVM>();
+				services.AddSingleton<PasswordsVM>();
 			})
 			.Build();
 	}

@@ -10,16 +10,17 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Navigation;
 using System.Windows.Shapes;
 
 namespace SecureData.Manager.Views
 {
 	/// <summary>
-	/// Interaction logic for LoginWindow.xaml
+	/// Interaction logic for PasswordsView.xaml
 	/// </summary>
-	public partial class LoginWindow : Window
+	public partial class PasswordsView : UserControl
 	{
-		public LoginWindow()
+		public PasswordsView()
 		{
 			InitializeComponent();
 		}

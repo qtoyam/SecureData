@@ -5,6 +5,7 @@
 		<ResourceDictionary>
 			<ResourceDictionary.MergedDictionaries>
 				<ResourceDictionary Source="pack://application:,,,/WPFCore.Controls;component/WindowChrome/CustomWindowChrome.xaml" />
+				<ResourceDictionary Source="pack://application:,,,/WPFCore.Controls;component/Styles/TabItemTransparent.xaml" />
 				<ResourceDictionary Source="Theme\Colors.xaml" />
 				<ResourceDictionary Source="Theme\Styles.xaml" />
 				<ResourceDictionary Source="Theme\Icons.xaml" />

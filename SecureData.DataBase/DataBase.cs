@@ -19,6 +19,12 @@ using SecureData.Storage.Services;
 
 namespace SecureData.Storage;
 
+//TODO:4 protect from swappable memory, ProtectedMemory, secure desktop(win)
+//TODO:10 replace aes ctr
+//TODO:10 save option
+//TODO:10 re-write database on each save
+//TODO:1 compress
+
 public sealed class DataBase : IDisposable, IAsyncDisposable
 {
 	private static class HLayout
@@ -58,6 +64,8 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 	private bool _isInited = false;
 
 	private readonly Services.Buffer _buffer = new(Consts.InitBufferSize);
+	private readonly ObjectPool<SHA256> _shaPool
+		= new(4, () => new SHA256(), x => x.Initialize(), x => x.Dispose());
 
 	private readonly AesCtr _mAes = new();
 	private readonly FileStream _mFile;
@@ -66,7 +74,9 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 	private readonly byte[] _salt = new byte[HLayout.SaltSize];
 	private readonly SHA256 _mHash = new();
 
-	private readonly ObjectPool<SHA256> _shaPool = new(4, () => new SHA256(), x => x.Initialize(), x => x.Dispose());
+	public bool IsCreated => _mFile.Length > 0;
+
+	public bool IsAuthed { get; private set; } = false;
 
 	public IReadOnlyList<Data> Root => _dataSet.Root;
 
@@ -296,9 +306,9 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 
 		void EraseFromFileRec(Data d)
 		{
-			if(d is FolderData fd)
+			if (d is FolderData fd)
 			{
-				foreach(var cd in fd)
+				foreach (var cd in fd)
 				{
 					EraseFromFileRec(cd);
 				}
@@ -306,9 +316,10 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 			d.ClearSensitive();
 			_mFile.Position = _dataSet.GetFilePos(d);
 			uint ctr = GetCTRFromPos(_mFile.Position);
-			using(var rented_dataBytes = _buffer.Rent(d.Size))
+			using (var rented_dataBytes = _buffer.Rent(d.Size))
 			{
 				Span<byte> dataBytes = rented_dataBytes.Span;
+				MemoryHelper.RNG(dataBytes);
 				d.Delete(dataBytes);
 				_mAes.Transform(dataBytes, ctr);
 				_mFile.Write(dataBytes);
@@ -349,6 +360,7 @@ public sealed class DataBase : IDisposable, IAsyncDisposable
 		EnsureNotInited();
 		_dataSet.FinishInit();
 		_isInited = true;
+		IsAuthed = true;
 	}
 	private void EnsureNotInited()
 	{

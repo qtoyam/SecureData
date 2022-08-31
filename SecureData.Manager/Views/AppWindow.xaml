@@ -3,36 +3,55 @@
 		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 		xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
 		xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-		xmlns:wcc="clr-namespace:WPFCore.Controls;assembly=WPFCore.Controls"
 		xmlns:local="clr-namespace:SecureData.Manager.Views"
 		mc:Ignorable="d"
-		Title="AppWindow"
-		Height="450"
-		Width="800"
+		xmlns:wc="clr-namespace:WPFCore.Controls;assembly=WPFCore.Controls"
+		xmlns:wb="clr-namespace:WPFCore.Behaviors;assembly=WPFCore.Behaviors"
+		xmlns:wconv="clr-namespace:WPFCore.Converters;assembly=WPFCore.Converters"
+		xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+		xmlns:vms="clr-namespace:SecureData.Manager.ViewModels"
+		Title="Secure Manager"
+		Height="400"
+		Width="600"
+		x:Name="Window"
 		Icon="{StaticResource diamondDrawingImage}"
 		Background="{StaticResource PrimaryBackgroundBrush}"
-		wcc:WindowChromeEx.Foreground="{StaticResource SecondaryTextBrush}"
-		d:DataContext="{d:DesignInstance Type=local:AppWindow, IsDesignTimeCreatable=False}">
-	<wcc:WindowChromeEx.Content>
+		wc:WindowChromeEx.Foreground="{StaticResource SecondaryTextBrush}"
+		d:DataContext="{d:DesignInstance Type=vms:AppWindowVM, IsDesignTimeCreatable=False}">
+	<wc:WindowChromeEx.Content>
 		<StackPanel Orientation="Horizontal"
 					Margin="5">
 			<Menu WindowChrome.IsHitTestVisibleInChrome="True"
 				  Background="Transparent"
 				  IsTabStop="False">
-				<wcc:MenuItemEx BackgroundMouseOver="Transparent"
-								Padding="0"
-								IsTabStop="False">
-					<wcc:MenuItemEx.Header>
+				<wc:MenuItemEx BackgroundMouseOver="Transparent"
+							   Padding="0"
+							   IsTabStop="False">
+					<wc:MenuItemEx.Header>
 						<Image Source="{StaticResource diamondDrawingImage}" />
-					</wcc:MenuItemEx.Header>
-				</wcc:MenuItemEx>
+					</wc:MenuItemEx.Header>
+				</wc:MenuItemEx>
 			</Menu>
 			<TextBlock Text="Secure Manager"
 					   Style="{StaticResource SecondaryTextBlock}"
 					   Margin="5,0,5,0" />
 		</StackPanel>
-	</wcc:WindowChromeEx.Content>
+	</wc:WindowChromeEx.Content>
 	<Grid>
-		
+		<TabControl Background="Transparent"
+					BorderThickness="0"
+					TabStripPlacement="Left">
+			<TabItem Header="Passwords"
+					 Style="{StaticResource TabItemTransparent}"
+					 Foreground="{StaticResource PrimaryTextBrush}">
+				<local:PasswordsView DataContext="{Binding PasswordsVM}" />
+			</TabItem>
+		</TabControl>
+		<Border Background="{Binding ElementName=Window, Path=Background}"
+				Visibility="{Binding AuthVM.IsAuthed, Converter={wconv:InvBool2VisConv}}">
+			<local:AuthBox DataContext="{Binding AuthVM}"
+						   Width="400"
+						   Height="200" />
+		</Border>
 	</Grid>
 </Window>

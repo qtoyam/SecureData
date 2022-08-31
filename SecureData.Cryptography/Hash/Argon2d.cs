@@ -47,6 +47,11 @@ namespace SecureData.Cryptography.Hash
 				}
 			}
 		}
+		public static unsafe void ComputeHash(Argon2dOptions options,
+			ReadOnlySpan<char> password, ReadOnlySpan<byte> salt, Span<byte> hash)
+		{
+			ComputeHash(options, MemoryMarshal.AsBytes(password), salt, hash);
+		}
 
 		private static class Native
 		{

@@ -1,0 +1,33 @@
+﻿<UserControl x:Class="SecureData.Manager.Views.AuthBox"
+			 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+			 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+			 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+			 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+			 xmlns:local="clr-namespace:SecureData.Manager.Views"
+			 mc:Ignorable="d"
+			 xmlns:wcc="clr-namespace:WPFCore.Controls;assembly=WPFCore.Controls"
+			 xmlns:wcb="clr-namespace:WPFCore.Behaviors;assembly=WPFCore.Behaviors"
+			 xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+			 xmlns:vms="clr-namespace:SecureData.Manager.ViewModels"
+			 Background="{StaticResource PrimaryBackgroundBrush}"
+			 wcc:WindowChromeEx.Foreground="{StaticResource SecondaryTextBrush}"
+			 d:DataContext="{d:DesignInstance Type=vms:AuthVM, IsDesignTimeCreatable=False}">
+	<Grid Margin="50,25,50,25">
+		<Grid.RowDefinitions>
+			<RowDefinition />
+			<RowDefinition />
+		</Grid.RowDefinitions>
+		<wcc:TextBoxEx Grid.Row="0"
+					   Style="{StaticResource PrimaryTextBoxEx}"
+					   Height="25"
+					   HintText="Password"
+					   Text="{Binding Password, UpdateSourceTrigger=PropertyChanged}" />
+		<wcc:ButtonEx Grid.Row="1"
+					  Style="{StaticResource PrimaryButtonEx}"
+					  Content="Auth"
+					  Width="100"
+					  Height="30"
+					  HorizontalAlignment="Center"
+					  Command="{Binding AuthCommand}" />
+	</Grid>
+</UserControl>

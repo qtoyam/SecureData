@@ -32,6 +32,15 @@ namespace SecureData.Storage.Helpers
 			CryptographicOperations.ZeroMemory(data);
 		}
 
+		//TODO: wipe string implementation
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static void Wipe(string data)
+		{
+			
+		}
+
+
+
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static void Copy(ReadOnlySpan<byte> source, Span<byte> destination)
 			=> source.CopyTo(destination);

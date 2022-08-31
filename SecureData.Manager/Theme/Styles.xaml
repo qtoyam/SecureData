@@ -1,5 +1,5 @@
 ﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+					xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 					xmlns:exc="clr-namespace:WPFCore.Controls;assembly=WPFCore.Controls">
 	<Style x:Key="ThemeFocusVisualStyle">
 		<Setter Property="Control.Template">
@@ -49,6 +49,8 @@
 	<Style x:Key="PrimaryTextBoxEx"
 		   TargetType="exc:TextBoxEx"
 		   BasedOn="{StaticResource BaseTextBoxEx}">
+		<Setter Property="Background"
+				Value="{StaticResource SecondaryBackgroundBrush}" />
 		<Setter Property="Foreground"
 				Value="{StaticResource PrimaryTextBrush}" />
 		<Setter Property="FontSize"
@@ -58,6 +60,8 @@
 	<Style x:Key="SecondaryTextBoxEx"
 		   TargetType="exc:TextBoxEx"
 		   BasedOn="{StaticResource BaseTextBoxEx}">
+		<Setter Property="Background"
+				Value="{StaticResource ThirdyBackgroundBrush}" />
 		<Setter Property="Foreground"
 				Value="{StaticResource SecondaryTextBrush}" />
 		<Setter Property="FontSize"
@@ -71,7 +75,7 @@
 		<Setter Property="FocusVisualStyle"
 				Value="{StaticResource ThemeFocusVisualStyle}" />
 		<Setter Property="CornerRadius"
-				Value="5" />
+				Value="3" />
 		<Setter Property="OpacityChanging"
 				Value="True" />
 	</Style>

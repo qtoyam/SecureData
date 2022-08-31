@@ -161,6 +161,8 @@ public abstract class Data
 	{
 		BinaryHelper.Write(dataBytes_zero.Slice(Layout.DataTypeOffset, Layout.DataTypeSize),
 			DataType | DeletedFlag);
+		BinaryHelper.Write(dataBytes_zero.Slice(Layout.IdOffset, Layout.IdSize),
+			NullId);
 	}
 
 	protected abstract void ClearSensitiveCore();

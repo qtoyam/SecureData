@@ -1,14 +1,24 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 
-using Microsoft.Toolkit.Mvvm.ComponentModel;
+using SecureData.Manager.Services;
+using SecureData.Storage;
 
-namespace SecureData.Manager.ViewModels
+namespace SecureData.Manager.ViewModels;
+
+[ObservableObject]
+public partial class AppWindowVM
 {
-	public class AppWindowVM : ObservableObject
+	private readonly DataBase _db;
+	private readonly Notifier _notifier;
+
+	public AuthVM AuthVM { get; }
+	public PasswordsVM PasswordsVM { get; }
+
+	public AppWindowVM(DataBase db, Notifier notifier, AuthVM authVM, PasswordsVM passwordsVM)
 	{
+		_db = db;
+		_notifier = notifier;
+		AuthVM = authVM;
+		PasswordsVM = passwordsVM;
 	}
 }
