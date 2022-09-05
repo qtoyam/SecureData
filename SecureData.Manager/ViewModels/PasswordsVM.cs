@@ -8,26 +8,29 @@ using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
+using SecureData.Manager.Models;
+using SecureData.Manager.Services;
 using SecureData.Storage;
 using SecureData.Storage.Models;
+using SecureData.Storage.Models.Abstract;
 
 namespace SecureData.Manager.ViewModels;
 
 [ObservableObject]
 public partial class PasswordsVM
 {
-	private readonly DataBase _db;
+	private readonly DatabaseVM _databaseVM;
 
-	public ObservableCollection<DataVM> Items { get; }
+	//TODO: here hierarchy
+	public IReadOnlyObservableList<Data>? Items => _databaseVM.DataItems;
 
-	public PasswordsVM(DataBase db)
+	public PasswordsVM(DatabaseVM databaseVM)
 	{
-		_db = db;
-		Items = new(_db.Root.Where(x => x is AccountData || x is FolderData).Cast<DataVM>());
+		_databaseVM = databaseVM;
 	}
 
 	[RelayCommand()]
-	private void InitAdd()
+	private void Add()
 	{
 
 	}

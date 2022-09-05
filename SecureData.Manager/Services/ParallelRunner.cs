@@ -21,7 +21,7 @@ public class ParallelRunner
 	{
 		try
 		{
-			await Task.Run(action).ConfigureAwait(false);
+			await Task.Run(action).ConfigureAwait(configureAwait);
 		}
 		catch (Exception ex)
 		{

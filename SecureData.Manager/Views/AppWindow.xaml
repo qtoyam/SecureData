@@ -24,12 +24,30 @@
 			<Menu WindowChrome.IsHitTestVisibleInChrome="True"
 				  Background="Transparent"
 				  IsTabStop="False">
+				<Menu.Resources>
+					<Style TargetType="{x:Type wc:MenuItemEx}">
+						<Setter Property="Background"
+								Value="{StaticResource SecondaryBackgroundBrush}" />
+						<Setter Property="BackgroundMouseOver"
+								Value="{StaticResource ThirdyBackgroundBrush}" />
+						<Setter Property="Foreground"
+								Value="{StaticResource SecondaryTextBrush}" />
+					</Style>
+				</Menu.Resources>
 				<wc:MenuItemEx BackgroundMouseOver="Transparent"
 							   Padding="0"
 							   IsTabStop="False">
 					<wc:MenuItemEx.Header>
 						<Image Source="{StaticResource diamondDrawingImage}" />
 					</wc:MenuItemEx.Header>
+					<wc:MenuItemEx Header="Database">
+						<wc:MenuItemEx Header="Create"
+									   Command="{Binding DatabaseVM.CreateDataBaseCommand}" />
+						<wc:MenuItemEx Header="Load"
+									   Command="{Binding DatabaseVM.LoadDataBaseCommand}" />
+						<wc:MenuItemEx Header="Unload"
+									   Command="{Binding DatabaseVM.UnloadDataBaseCommand}" />
+					</wc:MenuItemEx>
 				</wc:MenuItemEx>
 			</Menu>
 			<TextBlock Text="Secure Manager"
@@ -40,7 +58,8 @@
 	<Grid>
 		<TabControl Background="Transparent"
 					BorderThickness="0"
-					TabStripPlacement="Left">
+					TabStripPlacement="Left"
+					Visibility="{Binding DatabaseVM.IsAuthed, Converter={wconv:Bool2VisConv}}">
 			<TabItem Header="Passwords"
 					 Style="{StaticResource TabItemTransparent}"
 					 Foreground="{StaticResource PrimaryTextBrush}">
@@ -48,10 +67,43 @@
 			</TabItem>
 		</TabControl>
 		<Border Background="{Binding ElementName=Window, Path=Background}"
-				Visibility="{Binding AuthVM.IsAuthed, Converter={wconv:InvBool2VisConv}}">
-			<local:AuthBox DataContext="{Binding AuthVM}"
+				Visibility="{Binding DatabaseVM.IsAuthed, Converter={wconv:InvBool2VisConv}}">
+			<local:AuthBox DataContext="{Binding DatabaseVM}"
 						   Width="400"
 						   Height="200" />
 		</Border>
+		<Grid Background="{Binding ElementName=Window,Path=Background}"
+			  Visibility="{Binding DatabaseVM.HasDatabase, Converter={wconv:InvBool2VisConv}}"
+			  Width="200"
+			  Height="200">
+			<Grid.RowDefinitions>
+				<RowDefinition />
+				<RowDefinition />
+			</Grid.RowDefinitions>
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition />
+				<ColumnDefinition />
+			</Grid.ColumnDefinitions>
+			<TextBlock Grid.Row="0"
+					   Grid.ColumnSpan="2"
+					   Text="No database"
+					   Style="{StaticResource PrimaryTextBlock}"
+					   HorizontalAlignment="Center"
+					   VerticalAlignment="Center" />
+			<wc:ButtonEx Grid.Row="1"
+						 Grid.Column="0"
+						 Style="{StaticResource PrimaryButtonEx}"
+						 Content="Load"
+						 Width="80"
+						 Height="30"
+						 Command="{Binding DatabaseVM.LoadDataBaseCommand}" />
+			<wc:ButtonEx Grid.Row="1"
+						 Grid.Column="1"
+						 Style="{StaticResource PrimaryButtonEx}"
+						 Content="Create"
+						 Width="80"
+						 Height="30"
+						 Command="{Binding DatabaseVM.CreateDataBaseCommand}" />
+		</Grid>
 	</Grid>
 </Window>

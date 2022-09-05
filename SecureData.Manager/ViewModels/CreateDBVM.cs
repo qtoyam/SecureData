@@ -50,7 +50,6 @@ public partial class CreateDBVM
 		Argon2dOptions argonOptions = new(10, Memory!.Value, Threads!.Value);
 		await ParallelRunner.Run(() =>
 		{
-
 			uint incr = 2;
 			while (true)
 			{
@@ -72,7 +71,7 @@ public partial class CreateDBVM
 				}
 			}
 			argonOptions.TimeCost--;
-		}, _notifier).ConfigureAwait(false);
+		}, _notifier);
 		ArgonOptions = argonOptions;
 		_notifier.Notify("Database created.");
 		_notifier.Exit();

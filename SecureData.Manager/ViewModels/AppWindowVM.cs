@@ -8,17 +8,13 @@ namespace SecureData.Manager.ViewModels;
 [ObservableObject]
 public partial class AppWindowVM
 {
-	private readonly DataBase _db;
-	private readonly Notifier _notifier;
 
-	public AuthVM AuthVM { get; }
+	public DatabaseVM DatabaseVM { get; }
 	public PasswordsVM PasswordsVM { get; }
 
-	public AppWindowVM(DataBase db, Notifier notifier, AuthVM authVM, PasswordsVM passwordsVM)
+	public AppWindowVM(DatabaseVM databaseVM, PasswordsVM passwordsVM)
 	{
-		_db = db;
-		_notifier = notifier;
-		AuthVM = authVM;
+		DatabaseVM = databaseVM;
 		PasswordsVM = passwordsVM;
 	}
 }

@@ -11,23 +11,25 @@
 			 xmlns:vms="clr-namespace:SecureData.Manager.ViewModels"
 			 Background="{StaticResource PrimaryBackgroundBrush}"
 			 wcc:WindowChromeEx.Foreground="{StaticResource SecondaryTextBrush}"
-			 d:DataContext="{d:DesignInstance Type=vms:AuthVM, IsDesignTimeCreatable=False}">
+			 d:DataContext="{d:DesignInstance Type=vms:DatabaseVM, IsDesignTimeCreatable=False}">
 	<Grid Margin="50,25,50,25">
 		<Grid.RowDefinitions>
 			<RowDefinition />
 			<RowDefinition />
 		</Grid.RowDefinitions>
 		<wcc:TextBoxEx Grid.Row="0"
+					   x:Name="PasswordBox"
 					   Style="{StaticResource PrimaryTextBoxEx}"
 					   Height="25"
 					   HintText="Password"
-					   Text="{Binding Password, UpdateSourceTrigger=PropertyChanged}" />
+					   />
 		<wcc:ButtonEx Grid.Row="1"
 					  Style="{StaticResource PrimaryButtonEx}"
 					  Content="Auth"
 					  Width="100"
 					  Height="30"
 					  HorizontalAlignment="Center"
-					  Command="{Binding AuthCommand}" />
+					  Command="{Binding AuthCommand}"
+					  CommandParameter="{Binding ElementName=PasswordBox, Path=Text}"/>
 	</Grid>
 </UserControl>
